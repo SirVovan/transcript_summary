@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python transcripts/generate_u8.py)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import docx; print\\('ok'\\)\")",
+      "Bash(python transcripts/generate_konspekt_u8.py)",
+      "Bash(del \"d:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\transcripts\\\\generate_konspekt_u8.py\")",
+      "Bash(python -c ':*)",
+      "Edit(/.claude/skills/konspekt/**)"
+    ],
+    "additionalDirectories": [
+      "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts",
+      "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\.claude\\skills"
+    ]
+  }
+}

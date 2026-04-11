@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Транскрипты и выходные файлы — не коммитить (могут быть большими)
+transcripts/*.txt
+transcripts/*.docx
+transcripts/*.xlsx
+transcripts/*.pdf
+
+# HTML-карты и виджеты — по желанию можно включить, пока исключаем
+# transcripts/*.html
+
+# OS
+.DS_Store
+Thumbs.db

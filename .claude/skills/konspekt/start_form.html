@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,sans-serif;background:#EDEADE;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card{background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(28,25,21,.1),0 2px 8px rgba(28,25,21,.06),0 0 0 1px rgba(60,52,36,.08);padding:28px 32px;width:100%;max-width:480px}
+.logo{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8C8278;background:#F8F6F1;border:1px solid rgba(60,52,36,.15);border-radius:6px;padding:3px 9px;display:inline-block;margin-bottom:16px}
+h2{font-size:18px;font-weight:800;color:#1C1915;margin-bottom:4px;letter-spacing:-.01em}
+.sub{font-size:13px;color:#8C8278;font-weight:500;margin-bottom:24px}
+.divider{height:1px;background:rgba(60,52,36,.08);margin:20px 0}
+.section-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#B8B0A6;margin-bottom:12px}
+.radio-group{display:flex;flex-direction:column;gap:8px}
+.option{display:flex;align-items:flex-start;gap:11px;padding:11px 14px;border:1.5px solid rgba(60,52,36,.1);border-radius:11px;cursor:pointer;transition:all .15s}
+.option:hover{border-color:rgba(60,52,36,.2);background:#FAFAF7}
+.option.selected{border-color:#B8D0EF;background:#ECF2FB}
+.option input{margin-top:2px;accent-color:#2562B0;width:15px;height:15px;flex-shrink:0;cursor:pointer}
+.option-title{font-size:13px;font-weight:700;color:#1C1915}
+.option-desc{font-size:11.5px;color:#8C8278;font-weight:500;line-height:1.4;margin-top:2px}
+.check-group{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.check-item{display:flex;align-items:center;gap:9px;padding:10px 13px;border:1.5px solid rgba(60,52,36,.1);border-radius:10px;cursor:pointer;transition:all .15s}
+.check-item:hover{border-color:rgba(60,52,36,.2);background:#FAFAF7}
+.check-item.checked{border-color:#B8D0EF;background:#ECF2FB}
+.check-item input{accent-color:#2562B0;width:14px;height:14px;flex-shrink:0;cursor:pointer}
+.check-label{font-size:12px;font-weight:700;color:#1C1915;line-height:1.3}
+.check-ext{font-size:11px;color:#8C8278;font-weight:500;margin-top:1px}
+.btn{width:100%;padding:13px;font-size:13.5px;font-weight:800;font-family:'Manrope',sans-serif;background:#2562B0;color:#fff;border:none;border-radius:11px;cursor:pointer;margin-top:22px;transition:all .15s;letter-spacing:-.01em}
+.btn:hover{background:#1D4F96;transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,98,176,.3)}
+.btn:active{transform:scale(.98)}
+</style>
+</head>
+<body>
+<div class="card">
+  <span class="logo">Konspekt Skill</span>
+  <h2>Настройка обработки</h2>
+  <p class="sub">Транскрипт получен. Укажи параметры перед запуском.</p>
+
+  <div class="section-label">Режим работы</div>
+  <div class="radio-group">
+    <label class="option selected" id="opt-auto">
+      <input type="radio" name="mode" value="auto" checked onchange="selectMode(this)">
+      <div>
+        <div class="option-title">Автоматический</div>
+        <div class="option-desc">Полный пайплайн без остановок</div>
+      </div>
+    </label>
+    <label class="option" id="opt-manual">
+      <input type="radio" name="mode" value="manual" onchange="selectMode(this)">
+      <div>
+        <div class="option-title">С проверкой</div>
+        <div class="option-desc">Остановки на контрольных точках, ожидание одобрения</div>
+      </div>
+    </label>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-label">Создать файлы</div>
+  <div class="check-group">
+    <label class="check-item checked" id="c-xlsx">
+      <input type="checkbox" checked onchange="toggleCheck('c-xlsx',this)">
+      <div><div class="check-label">Карта смыслов</div><div class="check-ext">XLSX</div></div>
+    </label>
+    <label class="check-item checked" id="c-karta-html">
+      <input type="checkbox" checked onchange="toggleCheck('c-karta-html',this)">
+      <div><div class="check-label">Карта смыслов</div><div class="check-ext">HTML виджет</div></div>
+    </label>
+    <label class="check-item checked" id="c-docx">
+      <input type="checkbox" checked onchange="toggleCheck('c-docx',this)">
+      <div><div class="check-label">Конспект</div><div class="check-ext">DOCX</div></div>
+    </label>
+    <label class="check-item checked" id="c-widget">
+      <input type="checkbox" checked onchange="toggleCheck('c-widget',this)">
+      <div><div class="check-label">Виджет конспекта</div><div class="check-ext">HTML</div></div>
+    </label>
+  </div>
+
+  <button class="btn" onclick="launch()">Запустить →</button>
+</div>
+
+<script>
+function selectMode(radio){
+  document.getElementById('opt-auto').classList.toggle('selected', radio.value==='auto');
+  document.getElementById('opt-manual').classList.toggle('selected', radio.value==='manual');
+}
+function toggleCheck(id, cb){
+  document.getElementById(id).classList.toggle('checked', cb.checked);
+}
+function launch(){
+  var mode = document.querySelector('input[name="mode"]:checked').value;
+  var modeLabel = mode==='auto' ? 'автоматический' : 'с проверкой';
+  var files = [];
+  if(document.querySelector('#c-xlsx input').checked)       files.push('карта смыслов XLSX');
+  if(document.querySelector('#c-karta-html input').checked) files.push('карта смыслов HTML');
+  if(document.querySelector('#c-docx input').checked)       files.push('конспект DOCX');
+  if(document.querySelector('#c-widget input').checked)     files.push('виджет конспекта HTML');
+  if(files.length===0){ alert('Выбери хотя бы один файл'); return; }
+  var msg = 'Режим: ' + modeLabel + '. Создать файлы: ' + files.join(', ') + '. Запускай.';
+  if(typeof sendPrompt === 'function') sendPrompt(msg);
+  else alert('Параметры: ' + msg);
+}
+</script>
+</body>
+</html>

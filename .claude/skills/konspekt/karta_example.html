@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Карта смыслов</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ff: 'Manrope', system-ui, sans-serif;
+  --fm: 'JetBrains Mono', 'Courier New', monospace;
+  --bg-page:  #EDEADE;
+  --bg-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  --surface:  #FFFFFF;
+  --surface2: #F8F6F1;
+  --border:   rgba(60,52,36,.1);
+  --border2:  rgba(60,52,36,.18);
+  --tx1: #1C1915; --tx2: #4A4438; --tx3: #8C8278; --tx4: #B8B0A6;
+  --sh1: 0 2px 8px rgba(28,25,21,.06), 0 1px 2px rgba(28,25,21,.04);
+  --sh2: 0 6px 20px rgba(28,25,21,.09), 0 2px 6px rgba(28,25,21,.05);
+  --sh3: 0 16px 48px rgba(28,25,21,.12), 0 4px 12px rgba(28,25,21,.06);
+}
+
+@keyframes slideIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+@keyframes stripePulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+body {
+  font-family: var(--ff);
+  background-color: var(--bg-page);
+  background-image: var(--bg-noise);
+  color: var(--tx1);
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1380px;
+  height: 92vh;
+  min-height: 520px;
+  max-height: 860px;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--sh3), 0 0 0 1px var(--border);
+  overflow: hidden;
+  animation: slideIn .3s ease both;
+}
+
+/* Topbar */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px 9px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.course-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--tx3); background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 6px; padding: 3px 9px; white-space: nowrap; flex-shrink: 0;
+}
+
+.course-title { font-size: 13.5px; font-weight: 700; color: var(--tx1); }
+
+/* Stripe */
+.stripe {
+  height: 3px; flex-shrink: 0;
+  background: #2562B0;
+  animation: stripePulse 4s ease infinite;
+}
+
+/* Body */
+.body { flex: 1; overflow: hidden; min-height: 0; }
+
+/* Table */
+.table-wrap {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 18px;
+}
+
+.table-wrap::-webkit-scrollbar { width: 4px; }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* Row */
+.seg-row {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  margin-bottom: 7px;
+  background: var(--surface);
+  box-shadow: var(--sh1);
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+
+.seg-row:hover { box-shadow: var(--sh2); }
+
+/* Head */
+.seg-head {
+  display: grid;
+  grid-template-columns: 40px 90px 1fr 140px 28px;
+  align-items: center;
+  padding: 10px 14px;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.seg-head:hover { background: var(--surface2); }
+
+.seg-num {
+  font-size: 13px; font-weight: 800; font-family: var(--fm);
+  color: var(--tx4);
+}
+
+/* Timing: 2 lines, dash on first line */
+.seg-timing {
+  font-size: 11px; font-weight: 500; font-family: var(--fm);
+  color: var(--tx4); line-height: 1.45;
+}
+
+.seg-topic {
+  font-size: 13px; font-weight: 600; color: var(--tx1);
+  line-height: 1.35;
+}
+
+.seg-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  border-radius: 20px; padding: 3px 9px 3px 7px;
+  width: fit-content; justify-self: end;
+}
+
+.seg-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+.seg-chevron {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tx4); transition: transform .2s ease; flex-shrink: 0;
+}
+
+.seg-chevron svg { width: 14px; height: 14px; }
+.seg-row.open .seg-chevron { transform: rotate(180deg); }
+
+/* Expandable content */
+.seg-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .3s ease;
+}
+
+.seg-row.open .seg-content { max-height: 800px; }
+
+.seg-inner {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+  padding: 12px 14px 14px;
+}
+
+/* Suть text */
+.seg-suть {
+  font-size: 13px; color: var(--tx2); line-height: 1.65;
+}
+
+.seg-suть p { margin-bottom: 6px; }
+.seg-suть p:last-child { margin-bottom: 0; }
+.seg-suть strong { color: var(--tx1); font-weight: 700; }
+
+/* Lists — tight, indented, no gaps between items */
+.seg-suть ul {
+  margin: 0 0 0 18px;
+  padding: 0;
+  list-style: disc;
+}
+
+.seg-suть li {
+  margin-bottom: 2px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+.seg-suть li strong { color: var(--tx1); font-weight: 700; }
+
+/* Space after list before next paragraph */
+.seg-suть ul + p { margin-top: 7px; }
+
+/* Meta sidebar */
+.seg-meta { display: flex; flex-direction: column; gap: 7px; }
+
+.meta-block {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 11px;
+}
+
+.meta-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--tx4); margin-bottom: 3px;
+}
+
+.meta-value { font-size: 12px; font-weight: 500; color: var(--tx2); line-height: 1.45; }
+.meta-value.mono { font-family: var(--fm); font-size: 11.5px; }
+
+/* Footer */
+.footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+
+.ctrl-btn {
+  padding: 5px 13px;
+  font-size: 11.5px; font-weight: 700; font-family: var(--ff);
+  border-radius: 8px; border: 1.5px solid var(--border2);
+  background: var(--surface2); color: var(--tx2);
+  cursor: pointer; box-shadow: var(--sh1);
+  transition: background .15s, box-shadow .15s, transform .1s;
+}
+
+.ctrl-btn:hover { background: #fff; box-shadow: var(--sh2); transform: translateY(-1px); }
+.ctrl-btn:active { transform: scale(.97); }
+
+/* Промт-блок — встраивается в .seg-suть */
+.prompt-block {
+  background: #F4F6FB;
+  border: 1px solid #C8D8EF;
+  border-left: 3px solid #2562B0;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin: 6px 0;
+  font-family: var(--fm);
+  font-size: 11.5px;
+  color: var(--tx2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.prompt-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: #2562B0; margin-bottom: 4px;
+  font-family: var(--ff);
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <span class="course-badge" id="course-badge">Вайбкодинг · М1 У5.2</span>
+    <span class="course-title" id="course-title">Карта смыслов · Паспорт проекта</span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-shrink:0">
+      <button class="ctrl-btn" onclick="setAll(true)">Развернуть все</button>
+      <button class="ctrl-btn" onclick="setAll(false)">Свернуть все</button>
+    </div>
+  </div>
+  <div class="stripe"></div>
+  <div class="body"><div class="table-wrap" id="table"></div></div>
+  <div class="footer"><span class="f-info" id="finfo"></span></div>
+</div>
+
+<script>
+var TYPES = {
+  'Концепция':        {c:'#2562B0', bg:'#ECF2FB', mid:'#B8D0EF'},
+  'Методология':      {c:'#2E6E2E', bg:'#EBF5EB', mid:'#B0D4B0'},
+  'Демонстрация':     {c:'#96580F', bg:'#FAF0E4', mid:'#DEB882'},
+  'Итоги / резюме':   {c:'#4C3FA0', bg:'#EDEAFA', mid:'#BEB6E6'},
+  'Введение':         {c:'#4C3FA0', bg:'#EDEAFA', mid:'#BEB6E6'},
+  'Орг. момент':      {c:'#6B5B45', bg:'#F2EDE6', mid:'#C8B89A'},
+  'Вопросы / ответы': {c:'#6B5B45', bg:'#F2EDE6', mid:'#C8B89A'},
+  'Пример / кейс':    {c:'#96580F', bg:'#FAF0E4', mid:'#DEB882'},
+};
+
+function typeStyle(bt) {
+  return TYPES[bt] || {c:'#6B5B45', bg:'#F2EDE6', mid:'#C8B89A'};
+}
+
+// Format timing: "00:00:00 – \n00:03:39"  (dash on first line, two lines)
+function fmtTiming(t) {
+  return t.replace(' - ', ' –<br>');
+}
+
+// Render Suть: tight lists, space only after last list item before new paragraph
+function renderSuть(raw) {
+  if (!raw) return '';
+  var lines = raw.split('\n');
+  var out = '';
+  var inList = false;
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var isBullet = /^[•\-] /.test(line);
+    var isNum    = /^\d+[.)]\s/.test(line);
+    if (isBullet || isNum) {
+      if (!inList) { out += '<ul>'; inList = true; }
+      var text = line.replace(/^[•\-] /, '').replace(/^\d+[.)]\s/, '');
+      out += '<li>' + text + '</li>';
+    } else {
+      if (inList) {
+        out += '</ul>';
+        inList = false;
+      }
+      if (line.trim() !== '') {
+        out += '<p>' + line + '</p>';
+      }
+    }
+  }
+  if (inList) out += '</ul>';
+  return out;
+}
+
+// Toggle row independently
+function toggleRow(i) {
+  document.getElementById('row' + i).classList.toggle('open');
+}
+
+// DATA — replace with real data from карта смыслов
+var SEG = [
+  {
+    id:'01', timing:'00:00:00 - 00:03:39', speaker:'Дмитрий Ледовских',
+    topic:'Зачем нужна документация: проблема контекста ИИ',
+    blockType:'Концепция',
+    suть:'Дмитрий открывает урок с <strong>ключевого противоречия</strong>: ИИ всё забывает.\n\nКаждый новый чат — как <strong>новый сотрудник в первый день</strong>: талантливый, но не знает ничего о вашем проекте.\n\nРешение — <strong>документация</strong>: файл-памятка которую ИИ читает в первую же минуту работы.',
+    demo:''
+  },
+  {
+    id:'02', timing:'00:03:39 - 00:05:45', speaker:'Дмитрий Ледовских',
+    topic:'Два типа документации: проектная и техническая',
+    blockType:'Концепция',
+    suть:'Дмитрий разграничивает <strong>два типа</strong> документации.\n\n<strong>Проектная</strong> — архив знаний: что за проект, для кого, проблема, конкуренты. К ней будет обращаться Клод и любой разработчик.\n\n<strong>Техническая</strong> — описание конкретной функции перед реализацией: как работает, технологии, конкуренты.',
+    demo:''
+  },
+  {
+    id:'03', timing:'00:05:45 - 00:08:21', speaker:'Дмитрий Ледовских',
+    topic:'Цикл работы с документацией и три ключевых файла',
+    blockType:'Методология',
+    suть:'Дмитрий описывает цикл работы с документацией:\n• Набросали мысли — голосом, на бумаге\n• Показали Клоду, попросили уточнить\n• Перепроверили — всё ли учтено\n• Только потом дорабатываем фишки\n\nТри обязательных файла в каждом проекте: <strong>project.md</strong>, <strong>CLAUDE.md</strong>, <strong>PLAN.md</strong>.',
+    demo:''
+  },
+  {
+    id:'04', timing:'00:08:21 - 00:12:01', speaker:'Дмитрий Ледовских',
+    topic:'Файл project.md: создание описания проекта',
+    blockType:'Методология',
+    suть:'Дмитрий объясняет как создать <strong>project.md</strong> — проектную документацию.\n\nГлавный принцип: не нужно ничего выдумывать. Клод сам изучает файлы проекта и создаёт описание.\n\nХорошая документация содержит:\n• Что это за проект\n• Для кого он\n• Какую проблему решает\n• Основные функции\n• Что <strong>не</strong> будет сделано\n<div class="prompt-label">🔤 Промт — создание project.md</div><div class="prompt-block">Изучи все файлы в папке проекта.\nСоздай файл project.md с описанием проекта:\n• Что это за проект\n• Для кого он предназначен\n• Какую проблему решает\n• Основные функции\n• Что НЕ входит в scope\nЗадай уточняющие вопросы, если чего-то не хватает.</div>',
+    demo:'🖥 00:10:15 - 00:12:01 — Клод изучает файлы и создаёт project.md'
+  },
+  {
+    id:'05', timing:'00:12:01 - 00:14:36', speaker:'Дмитрий Ледовских',
+    topic:'Демонстрация: создание project.md в VS Code',
+    blockType:'Демонстрация',
+    suть:'Дмитрий показывает создание project.md в реальном проекте.\n\nКлод изучает все файлы, задаёт уточняющие вопросы и создаёт описание: «Коллекция самостоятельных HTML-страниц, личный сайт-портфолио».\n\nВывод: файл появляется слева в дереве проекта, открывается в любом текстовом редакторе.',
+    demo:'🖥 00:12:01 - 00:14:36 — Клод создаёт project.md в VS Code, результат виден в дереве файлов'
+  },
+  {
+    id:'06', timing:'00:14:36 - 00:18:48', speaker:'Дмитрий Ледовских',
+    topic:'Файл CLAUDE.md: инструкция для нового чата',
+    blockType:'Методология',
+    suть:'<strong>CLAUDE.md</strong> — самый важный файл. Клод читает его автоматически при каждом запуске.\n\nРаботает как памятка на холодильнике: правила дома, которые знает каждый кто зайдёт.\n\n<strong>Проверка:</strong> новый чат → «создай страницу с тарифами» без упоминания дизайна. Если Клод воспроизвёл тот же стиль — CLAUDE.md работает.',
+    demo:'🔤 00:16:20 — промпт создания CLAUDE.md с правилами проекта'
+  },
+  {
+    id:'07', timing:'00:18:48 - 00:22:58', speaker:'Дмитрий Ледовских',
+    topic:'Файл PLAN.md: управление идеями и задачами',
+    blockType:'Методология',
+    suть:'<strong>PLAN.md</strong> решает проблему «хочух» — идей которые приходят в процессе работы и забываются к следующему дню.\n\nЛогика:\n• Пришла идея → «Добавь в план» → зафиксировано\n• Вернулись к проекту → «Посмотри план» → Клод выдаст список\n• Задача выполнена → Клод сам отмечает как сделанную',
+    demo:'🔤 00:20:05 — промпт создания PLAN.md с чек-листом задач'
+  },
+  {
+    id:'08', timing:'00:22:58 - 00:27:39', speaker:'Дмитрий Ледовских',
+    topic:'Цикл улучшения документации и итоги урока',
+    blockType:'Итоги / резюме',
+    suть:'Документация улучшается итерационно через цикл:\n1. <strong>Перечитайте</strong> — как будто видите впервые\n2. <strong>«Ты уверен?»</strong> — проверяем ключевые утверждения\n3. <strong>Критический взгляд</strong> — просите Клода найти слабые места\n4. <strong>Обновите</strong> — потом снова шаг 1\n\n1–3 прогона достаточно. <strong>Ответственность за решения всегда на человеке.</strong>',
+    demo:''
+  }
+];
+
+function render() {
+  var html = '';
+  SEG.forEach(function(s, i) {
+    var t = typeStyle(s.blockType);
+    var demoBlock = s.demo
+      ? '<div class="meta-block"><div class="meta-label">Демонстрации</div><div class="meta-value">' + s.demo + '</div></div>'
+      : '';
+    html += '<div class="seg-row open" id="row' + i + '">'
+      + '<div class="seg-head" onclick="toggleRow(' + i + ')">'
+        + '<span class="seg-num">' + s.id + '</span>'
+        + '<span class="seg-timing">' + fmtTiming(s.timing) + '</span>'
+        + '<span class="seg-topic">' + s.topic + '</span>'
+        + '<span class="seg-badge" style="color:' + t.c + ';background:' + t.bg + ';border:1px solid ' + t.mid + '">'
+          + '<span class="seg-dot" style="background:' + t.c + '"></span>' + s.blockType
+        + '</span>'
+        + '<span class="seg-chevron">'
+          + '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5l5 5 5-5"/></svg>'
+        + '</span>'
+      + '</div>'
+      + '<div class="seg-content">'
+        + '<div class="seg-inner">'
+          + '<div class="seg-suть">' + renderSuть(s.suть) + '</div>'
+          + '<div class="seg-meta">'
+            + '<div class="meta-block"><div class="meta-label">Спикер</div><div class="meta-value">' + s.speaker + '</div></div>'
+            + '<div class="meta-block"><div class="meta-label">Тайминг</div><div class="meta-value mono">' + fmtTiming(s.timing) + '</div></div>'
+            + demoBlock
+          + '</div>'
+        + '</div>'
+      + '</div>'
+    + '</div>';
+  });
+  document.getElementById('table').innerHTML = html;
+  document.getElementById('finfo').textContent = SEG.length + ' сегментов';
+}
+
+function setAll(open) {
+  document.querySelectorAll('.seg-row').forEach(function(row) {
+    if (open) row.classList.add('open');
+    else row.classList.remove('open');
+  });
+}
+
+render();
+</script>
+</body>
+</html>
