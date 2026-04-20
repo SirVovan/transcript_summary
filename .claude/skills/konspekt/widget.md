@@ -133,19 +133,49 @@ height: 92vh  — умещается на экране без скролла
 
 ---
 
-## Весь HTML через строковую конкатенацию
+## Генерация виджета через widget_generator.py
 
-Строить контент через простые JS-функции с конкатенацией строк `+`:
+**Виджет создаётся скриптом, не вручную.** Claude генерирует JSON → скрипт собирает HTML.
+JS-экранирование полностью выполняет Python (`json.dumps`) — кириллические lookalike-ошибки исключены.
 
-```javascript
-function b(s){ return '<strong>' + s + '</strong>' }
-function p(s){ return '<p>' + s + '</p>' }
-function fn(s){ return '<span class="fn-tag">' + s + '</span>' }
-function kw(s,type){ /* цвет из палитры типа */ }
+### Шаг 1 — создать JSON-файл: `Виджет — [Название].json` в `transcripts/`
+
+```json
+{
+  "meta": {
+    "badge": "Вайбкодинг · М2",
+    "title": "ВИП-разборы · Дмитрий Ледовских",
+    "out":   "Виджет — Вайбкодинг Модуль 2 ВИП-разборы.html"
+  },
+  "prompts": {
+    "03": "Текст промпта\nСледующая строка\n• Пункт"
+  },
+  "segments": [
+    {
+      "id":     "01",
+      "type":   "concept",
+      "title":  "Название сегмента",
+      "timing": "0:00 – 0:05:00",
+      "body":   "<p>HTML левой колонки. <strong>Жирный</strong>, «ёлочки», — тире — всё прямо в строке.</p>",
+      "right":  "<div class=\"insights\"><div class=\"insight\" style=\"border-left-color:#2562B0\">Инсайт</div></div>"
+    }
+  ]
+}
 ```
 
-**НЕ использовать template literals (backtick) с вложенными кавычками** —
-это ломает HTML в некоторых браузерах при вставке через innerHTML.
+**Правила для `body` и `right`:**
+- Писать HTML напрямую в строке JSON — `«»`, `—`, `•` вставлять как есть, без `\u`-эскейпов
+- `body`: теги `<p>`, `<strong>`, `<h3>`, `<ul><li>`, `<span class="fn-tag">`, `<span class="kw-tag" style="color:C;background:BG;border-color:MID">`
+- `right`: классы `.insights`/`.insight`, `.stats3`/`.stat-card`, `.cmp2`/`.cmp-card`, `.cycle`/`.cs`, `.pr-block`, `.quote-block`, `.final-grid`/`.final-card`
+- Для промпт-блока: `<div class="pr-block"><div class="pr-head"><span class="pr-label">Промпт</span><button class="pr-copy" id="cpbID" onclick="cp('ID')">копировать</button></div><div class="pr-text">ТЕКСТ ПРОМПТА</div></div>`
+
+### Шаг 2 — запустить генератор
+
+```bash
+PYTHONUTF8=1 python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет — Название.json"
+```
+
+Скрипт создаёт HTML и автоматически проверяет JS-синтаксис через `node --check`.
 
 ---
 

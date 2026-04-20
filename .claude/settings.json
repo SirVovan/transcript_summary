@@ -7,11 +7,29 @@
       "Bash(python transcripts/generate_konspekt_u8.py)",
       "Bash(del \"d:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\transcripts\\\\generate_konspekt_u8.py\")",
       "Bash(python -c ':*)",
-      "Edit(/.claude/skills/konspekt/**)"
+      "Edit(/.claude/skills/konspekt/**)",
+      "Bash(gh --version)",
+      "Bash(notebooklm status:*)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(f\\\\\"{n['created_at'][:10]}  {n['title']}\\\\\"\\) for n in sorted\\(data['notebooks'], key=lambda x: x['created_at'], reverse=True\\)]\")",
+      "Bash(notebooklm list:*)",
+      "Read(//d//**)"
     ],
     "additionalDirectories": [
       "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts",
       "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\.claude\\skills"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PYTHONUTF8=1 python \"d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\.claude\\skills\\konspekt\\validate_widget.py\""
+          }
+        ]
+      }
     ]
   }
 }
