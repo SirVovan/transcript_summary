@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(notebooklm list:*)",
+      "Bash(python -c ' *)",
+      "Bash(node --check /tmp/widget_check.js)",
+      "Bash(node --check \"transcripts/widget_check.js\")",
+      "Bash(python)",
+      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/test_widget_input.json\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Вайбкодинг Модуль 2 Живые разборы.json\")",
+      "WebSearch",
+      "PowerShell(Get-ChildItem \"d:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\.claude\\\\skills\\\\konspekt\\\\\" | Select-Object Name, @{N=\"KB\";E={[math]::Round\\($_.Length/1024,1\\)}} | Sort-Object KB -Descending | Format-Table -AutoSize)",
+      "Bash(Remove-Item \"d:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\.claude\\\\skills\\\\konspekt\\\\widget_example.html\")",
+      "PowerShell($dir = \"d:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\.claude\\\\skills\\\\konspekt\"; Get-ChildItem $dir | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Sort-Object KB -Descending)",
+      "Bash(git commit *)",
+      "Bash(mkdir -p \".claude/skills/konspekt/_archive_2026-05-04\")",
+      "Bash(cp .claude/skills/konspekt/*.md .claude/skills/konspekt/_archive_2026-05-04/)",
+      "Bash(cp .claude/skills/konspekt/*.py .claude/skills/konspekt/_archive_2026-05-04/)",
+      "Bash(cp .claude/skills/konspekt/*.html .claude/skills/konspekt/_archive_2026-05-04/)",
+      "Bash(Get-Item .claude/skills/konspekt -Force)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(pip install pytest -q)",
+      "PowerShell(python -m pip install pytest -q)",
+      "Bash(python -m pytest tests/test_preprocessor.py -v)"
+    ]
+  }
+}
