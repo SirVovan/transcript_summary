@@ -36,6 +36,20 @@ CORE — НЕИЗМЕНЯЕМОЕ ЯДРО
 Опциональная колонка «Демонстрации» — правила ниже в разделе
 ОТСЛЕЖИВАНИЕ ДЕМОНСТРАЦИЙ.
 
+ФОРМАТ MD — ШАБЛОН ЗАГОЛОВКА ТАБЛИЦЫ
+
+При выводе карты в .md использовать div-ширины в строке заголовка.
+
+С колонкой «Демонстрации»:
+| <div style="width:15px">#</div> | <div style="width:80px">Тайминг</div> | <div style="width:80px">Спикер</div> | <div style="width:160px">Тема</div> | <div style="width:100px">Тип блока</div> | <div style="min-width:480px">Суть</div> | <div style="width:200px">Демонстрации</div> |
+|---|---------|--------|------|-----------|------|--------------|
+
+Без колонки «Демонстрации»:
+| <div style="width:15px">#</div> | <div style="width:80px">Тайминг</div> | <div style="width:80px">Спикер</div> | <div style="width:200px">Тема</div> | <div style="width:110px">Тип блока</div> | <div style="min-width:560px">Суть</div> |
+|---|---------|--------|------|-----------|------|
+
+В ячейках использовать `<br><br>` между абзацами и `<br>` перед пунктами списков — стандартный Markdown не поддерживает переносы строк внутри таблиц.
+
 ТАЙМИНГ — формат: 00:00:00 - 00:00:00 (пробел до и после дефиса)
 ТЕМА — короткое название блока, без жирного.
 ТИП БЛОКА — метка из списка активного профиля.
@@ -368,7 +382,7 @@ CORE — НЕИЗМЕНЯЕМОЕ ЯДРО
 ЭТАП 5 — ГЕНЕРАЦИЯ HTML-КАРТЫ
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
-Используй структуру и стили из references/karta_example.html.
+Используй структуру и стили из .claude/skills/konspekt/karta_example.html.
 
 РАЗМЕЩЕНИЕ ПРОМПТОВ:
 Промты (🔤) встраивать прямо в текст колонки «Суть» —
@@ -407,8 +421,8 @@ CSS для этих классов:
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
 После активации профиля в ШАГ 2 — прочитай соответствующий файл:
-- references/kartograf_profile_lecture.md    (лекции, вебинары, мастер-классы)
-- references/kartograf_profile_custdev.md    (интервью, discovery call, кастдев)
-- references/kartograf_profile_meeting.md    (созвоны, планёрки, встречи)
-- references/kartograf_profile_conference.md (конференции, митапы, мероприятия)
-- references/kartograf_profile_base.md       (смешанный или неопределённый тип)
+- .claude/skills/konspekt/kartograf_profile_lecture.md    (лекции, вебинары, мастер-классы)
+- .claude/skills/konspekt/kartograf_profile_custdev.md    (интервью, discovery call, кастдев)
+- .claude/skills/konspekt/kartograf_profile_meeting.md    (созвоны, планёрки, встречи)
+- .claude/skills/konspekt/kartograf_profile_conference.md (конференции, митапы, мероприятия)
+- .claude/skills/konspekt/kartograf_profile_base.md       (смешанный или неопределённый тип)
