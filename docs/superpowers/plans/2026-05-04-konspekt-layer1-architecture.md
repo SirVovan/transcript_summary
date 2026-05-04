@@ -384,11 +384,17 @@ Create `.claude/skills/konspekt/tov_spec.md`:
 Если характерных черт не выявлено — блок остаётся пустым, работают только базовые правила выше.
 ```
 
-- [ ] **Step 2: Коммит**
+- [ ] **Step 2: Перенести правила из konstitutsiya.md**
+
+Прочитать `.claude/skills/konspekt/_archive_2026-05-04/konstitutsiya.md`.
+Найти правила, которые не дублируют уже написанные базовые правила в tov_spec.md,
+и добавить их в раздел «Базовые правила» (запрещённые приёмы, структурные требования и т.п.).
+
+- [ ] **Step 3: Коммит**
 
 ```bash
 git add .claude/skills/konspekt/tov_spec.md
-git commit -m "feat(konspekt): add base ToV specification"
+git commit -m "feat(konspekt): add base ToV specification with rules from konstitutsiya"
 ```
 
 ---
@@ -617,7 +623,13 @@ Create `.claude/skills/konspekt/subagent_writer.md`:
 - Не ссылайся на «навигационную карту», «subagent», «бригадира» в тексте
 ```
 
-- [ ] **Step 2: Проверить покрытие спека**
+- [ ] **Step 2: Дополнить правилами из konspektolog.md**
+
+Прочитать `.claude/skills/konspekt/_archive_2026-05-04/konspektolog.md`.
+Найти конкретные правила написания конспекта (что включать, что опускать, как работать с примерами),
+которые не отражены в текущих разделах subagent_writer.md — добавить в раздел «### Текст».
+
+- [ ] **Step 3: Проверить покрытие спека**
 
 Прочитать spec, секцию «ШАГ 1б». Убедиться:
 - Получает: nav map + ToV spec + срез — ✓
@@ -625,11 +637,11 @@ Create `.claude/skills/konspekt/subagent_writer.md`:
 - Не видит соседних subagents — ✓ (явно прописано в «чего не делать»)
 - Не думает про форматы вывода — ✓
 
-- [ ] **Step 3: Коммит**
+- [ ] **Step 4: Коммит**
 
 ```bash
 git add .claude/skills/konspekt/subagent_writer.md
-git commit -m "feat(konspekt): add subagent writer instructions for step 1b"
+git commit -m "feat(konspekt): add subagent writer instructions with konspektolog rules"
 ```
 
 ---
