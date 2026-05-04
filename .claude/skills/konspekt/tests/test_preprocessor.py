@@ -60,9 +60,16 @@ def test_split_overlap_present(tmp_path):
     transcript = tmp_path / "test.txt"
     transcript.write_text(content, encoding='utf-8')
 
-    from preprocessor import split
+    from preprocessor import split, OVERLAP, TOKENS_PER_CHAR
     chunks = split(str(transcript), ["00:30:00"])
 
-    text2 = open(chunks[1], encoding='utf-8').read()
-    # chunk2 должен начинаться раньше 00:30:00 из-за перекрытия
-    assert any(f"00:{m:02d}:" in text2 for m in range(27, 30))
+    with open(chunks[1], encoding='utf-8') as f:
+        text2 = f.read()
+    # chunk2 должен содержать строки ДО границы 00:30:00 (перекрытие)
+    # Проверяем что первая строка chunk2 начинается раньше 30:00
+    first_line = text2.strip().split('\n')[0]
+    import re
+    m = re.match(r'\[00:(\d+):(\d+)\]', first_line)
+    assert m is not None
+    first_minutes = int(m.group(1))
+    assert first_minutes < 30, f"Ожидалось перекрытие (первая строка < 00:30:00), получено: {first_line}"

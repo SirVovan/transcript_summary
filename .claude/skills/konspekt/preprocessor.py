@@ -35,9 +35,9 @@ def parse_transcript_lines(text: str) -> list:
     for raw in text.strip().split('\n'):
         m = re.match(r'\[?(\d{1,2}):(\d{2})(?::(\d{2}))?\]?\s*(.*)', raw)
         if m:
-            h, mm, s, body = m.groups()
-            secs = (int(h) * 3600 + int(mm) * 60 + int(s)) if s else (int(h) * 60 + int(mm))
-            time_str = f"{int(h):02d}:{int(mm):02d}" + (f":{int(s):02d}" if s else "")
+            first, mm, s, body = m.groups()
+            secs = (int(first) * 3600 + int(mm) * 60 + int(s)) if s else (int(first) * 60 + int(mm))
+            time_str = f"{int(first):02d}:{int(mm):02d}" + (f":{int(s):02d}" if s else "")
             result.append({'time': time_str, 'seconds': secs, 'text': body.strip()})
         elif raw.strip() and result:
             result[-1]['text'] += ' ' + raw.strip()
@@ -45,7 +45,8 @@ def parse_transcript_lines(text: str) -> list:
 
 
 def info(path: str) -> None:
-    text = open(path, encoding='utf-8').read()
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
     tokens = estimate_tokens(text)
     lines = parse_transcript_lines(text)
 
@@ -65,7 +66,8 @@ def info(path: str) -> None:
 
 
 def windows(path: str) -> None:
-    text = open(path, encoding='utf-8').read()
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
     lines = parse_transcript_lines(text)
 
     boundary_indices = []
@@ -94,7 +96,7 @@ def windows(path: str) -> None:
             end += 1
             win_tok += estimate_tokens(lines[end]['text'])
 
-        window = '\n'.join(f"[{l['time']}] {l['text']}" for l in lines[start:end + 1])
+        window = '\n'.join(f"[{ln['time']}] {ln['text']}" for ln in lines[start:end + 1])
 
         print(f"\n{'=' * 60}")
         print(f"ТОЧКА {b_num + 1} | около {lines[center]['time']}")
@@ -107,7 +109,8 @@ def windows(path: str) -> None:
 
 
 def split(path: str, boundary_times: list) -> list:
-    text = open(path, encoding='utf-8').read()
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
     lines = parse_transcript_lines(text)
     boundaries = sorted(time_to_seconds(t) for t in boundary_times)
 
