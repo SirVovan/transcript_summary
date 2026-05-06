@@ -53,13 +53,19 @@
 
 При неясности — использовать `concept`.
 
+Составные и комбинированные типы (напр. `инструктаж-практика`, `демонстрация + практика`) — использовать первую роль из пары.
+
 **`title`** — тема из заголовка сегмента (часть после последнего `|`)
 
 **`timing`** — таймштампы из заголовка, формат `"HH:MM–HH:MM"`
 
-**`body`** — полный `### Текст` → HTML (см. раздел ниже)
+**`body`** — `**Ключевая мысль:**` + полный `### Текст` → HTML (см. раздел ниже): сначала `<p><strong>Ключевая мысль:</strong> [текст]</p>`, затем содержимое `### Текст`
 
 **`right`** — полный `### Карта` → HTML (см. раздел ниже)
+
+### Поле `prompts`
+
+Не заполняется из мастер-MD. Использовать пустой объект: `"prompts": {}`
 
 ---
 
@@ -76,7 +82,7 @@
 ```
 →
 ```html
-<ul style="margin:4px 0 9px 20px;padding:0"><li style="margin-bottom:4px">пункт А</li><li style="margin-bottom:4px">пункт Б</li></ul>
+<ul style="margin:4px 0 9px 18px;padding:0"><li style="margin-bottom:4px">пункт А</li><li style="margin-bottom:4px">пункт Б</li></ul>
 ```
 
 Нумерованный список:
@@ -106,7 +112,7 @@
 `> **Демонстрация:** текст`
 →
 ```html
-<div style="background:#F0F4F8;border-left:3px solid #607D8B;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55"><strong>Демонстрация:</strong> текст</div>
+<div style="background:#FAF0E4;border-left:3px solid #96580F;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55"><strong>Демонстрация:</strong> текст</div>
 ```
 
 ---
@@ -139,7 +145,7 @@
 ## Шаг 3. Запустить генератор
 
 ```
-python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет — [Название].json"
+PYTHONUTF8=1 python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет — [Название].json"
 ```
 
 Скрипт выводит путь к HTML и проверяет JS-синтаксис. Ожидаемый результат: `✅ JS syntax OK`
