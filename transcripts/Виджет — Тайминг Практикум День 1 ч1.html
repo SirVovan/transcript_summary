@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Тайминг. Практикум. День 1 ч1 · Никита Велс</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ff: 'Manrope', system-ui, sans-serif;
+  --fm: 'JetBrains Mono', 'Courier New', monospace;
+  --bg-page:  #EDEADE;
+  --bg-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  --surface:  #FFFFFF;
+  --surface2: #F8F6F1;
+  --border:   rgba(60,52,36,.1);
+  --border2:  rgba(60,52,36,.18);
+  --tx1: #1C1915;
+  --tx2: #4A4438;
+  --tx3: #8C8278;
+  --tx4: #B8B0A6;
+  --sh1: 0 2px 8px rgba(28,25,21,.06), 0 1px 2px rgba(28,25,21,.04);
+  --sh2: 0 6px 20px rgba(28,25,21,.09), 0 2px 6px rgba(28,25,21,.05);
+  --sh3: 0 16px 48px rgba(28,25,21,.12), 0 4px 12px rgba(28,25,21,.06);
+  --c-concept:#2562B0; --c-concept-bg:#ECF2FB; --c-concept-mid:#B8D0EF; --c-concept-pale:#F4F8FE;
+  --c-method: #2E6E2E; --c-method-bg: #EBF5EB; --c-method-mid: #B0D4B0; --c-method-pale: #F3FAF3;
+  --c-demo:   #96580F; --c-demo-bg:   #FAF0E4; --c-demo-mid:   #DEB882; --c-demo-pale:   #FDF8F0;
+  --c-final:  #4C3FA0; --c-final-bg:  #EDEAFA; --c-final-mid:  #BEB6E6; --c-final-pale:  #F5F4FC;
+  --tab-bg: var(--c-concept-bg);
+  --tab-c:  var(--c-concept);
+  --tab-mid:var(--c-concept-mid);
+}
+
+@keyframes slideIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+@keyframes stripePulse{ 0%,100%{opacity:1} 50%{opacity:.7} }
+@keyframes tooltipIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:translateX(0)} }
+
+body { font-family:var(--ff); background-color:var(--bg-page); background-image:var(--bg-noise); color:var(--tx1); font-size:13.5px; line-height:1.6; overflow:hidden; height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
+
+.shell { display:flex; flex-direction:column; width:100%; max-width:1380px; height:92vh; min-height:520px; max-height:840px; background:var(--surface); border-radius:18px; box-shadow:var(--sh3),0 0 0 1px var(--border); overflow:hidden; animation:slideIn .3s ease both; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:10px 20px 9px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; gap:16px; }
+.topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
+.course-badge { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--tx3); background:var(--surface2); border:1px solid var(--border2); border-radius:6px; padding:3px 9px; white-space:nowrap; flex-shrink:0; }
+.course-title { font-size:13.5px; font-weight:700; color:var(--tx1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.tabs { display:flex; gap:3px; flex-shrink:0; position:relative; z-index:100; }
+.tab-wrap { position:relative; }
+.tab { width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; font-family:var(--ff); color:var(--tx4); background:transparent; border:1.5px solid transparent; border-radius:9px; cursor:pointer; transition:color .15s,background .15s,border-color .15s,transform .1s; position:relative; z-index:1; }
+.tab:hover { background:var(--surface2); color:var(--tx2); transform:scale(1.08); }
+.tab.on { background:var(--tab-bg); color:var(--tab-c); border-color:var(--tab-mid); }
+
+.stripe { height:3px; flex-shrink:0; transition:background .35s ease; animation:stripePulse 4s ease infinite; }
+
+.body { flex:1; display:grid; grid-template-columns:1fr 1fr; overflow:hidden; min-height:0; }
+
+.lcol { padding:20px 24px 14px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; min-height:0; background:var(--surface); }
+.seg-pill { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; border-radius:20px; padding:3px 10px 3px 8px; margin-bottom:9px; flex-shrink:0; width:fit-content; box-shadow:var(--sh1); }
+.seg-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+.seg-title { font-size:16px; font-weight:800; color:var(--tx1); line-height:1.28; margin-bottom:4px; flex-shrink:0; letter-spacing:-.01em; }
+.seg-timing { font-size:11px; font-weight:500; color:var(--tx4); margin-bottom:13px; font-family:var(--fm); flex-shrink:0; }
+.seg-body { flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; padding-right:8px; color:var(--tx2); font-size:13.5px; line-height:1.7; animation:slideIn .25s ease both; }
+.seg-body::-webkit-scrollbar{width:3px} .seg-body::-webkit-scrollbar-track{background:transparent} .seg-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.seg-body p{margin-bottom:8px} .seg-body p:last-child{margin-bottom:0} .seg-body strong{color:var(--tx1);font-weight:700} .seg-body h3{font-size:13px;font-weight:700;color:var(--tx1);margin:11px 0 5px;letter-spacing:-.01em} .seg-body ul{margin:4px 0 9px 18px} .seg-body li{margin-bottom:4px} .seg-body li::marker{color:var(--tx4)} .seg-body li strong{color:var(--tx1);font-weight:700}
+
+.rcol { display:flex; flex-direction:column; overflow:hidden; min-height:0; transition:background .35s ease; position:relative; }
+.rcol::before { content:''; position:absolute; inset:0; background:var(--bg-noise); opacity:.6; pointer-events:none; }
+.rcol-inner { padding:18px 20px 14px; display:flex; flex-direction:column; gap:10px; height:100%; overflow-y:auto; min-height:0; position:relative; z-index:1; animation:slideIn .3s ease both; }
+.rcol-inner::-webkit-scrollbar{width:3px} .rcol-inner::-webkit-scrollbar-track{background:transparent} .rcol-inner::-webkit-scrollbar-thumb{background:rgba(60,52,36,.15);border-radius:3px}
+
+.stats3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; flex-shrink:0; }
+.stat-card { background:rgba(255,255,255,.85); border:1px solid var(--border); border-radius:13px; padding:12px 13px; box-shadow:var(--sh1); backdrop-filter:blur(4px); transition:box-shadow .2s,transform .15s; }
+.stat-card:hover{box-shadow:var(--sh2);transform:translateY(-1px)}
+.stat-n { font-size:24px; font-weight:800; line-height:1; margin-bottom:4px; letter-spacing:-.02em; }
+.stat-l { font-size:11px; color:var(--tx3); line-height:1.35; font-weight:500; }
+
+.cmp2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; flex-shrink:0; }
+.cmp-card { border-radius:13px; padding:12px 14px; box-shadow:var(--sh1); border:1px solid transparent; transition:box-shadow .2s,transform .15s; }
+.cmp-card:hover{box-shadow:var(--sh2);transform:translateY(-1px)}
+.cmp-h { font-size:12px; font-weight:700; margin-bottom:5px; }
+.cmp-b { font-size:12px; line-height:1.55; font-weight:500; }
+.cmp-m { font-size:11px; margin-top:6px; font-weight:600; font-style:italic; opacity:.8; }
+
+.cycle { display:flex; align-items:stretch; flex-shrink:0; background:rgba(255,255,255,.85); border:1px solid var(--border); border-radius:13px; overflow:hidden; box-shadow:var(--sh1); }
+.cs { flex:1; text-align:center; padding:9px 4px; font-size:11px; color:var(--tx3); line-height:1.35; font-weight:600; border-right:1px solid var(--border); }
+.cs:last-child{border-right:none}
+.cs-n { font-size:17px; font-weight:800; margin-bottom:2px; color:#2562B0; letter-spacing:-.02em; }
+
+.insights { display:flex; flex-direction:column; gap:7px; }
+.insight { background:rgba(255,255,255,.8); border:1px solid var(--border); border-radius:0 11px 11px 0; border-left:3px solid; padding:8px 12px 8px 13px; font-size:12px; color:var(--tx2); line-height:1.55; box-shadow:var(--sh1); font-weight:500; transition:box-shadow .15s; }
+.insight:hover{box-shadow:var(--sh2)}
+.insight strong{color:var(--tx1);font-weight:700}
+
+.pr-block { background:rgba(250,248,243,.9); border:1px solid var(--border2); border-radius:13px; overflow:hidden; flex-shrink:0; box-shadow:var(--sh1); }
+.pr-head { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; border-bottom:1px solid var(--border); background:rgba(237,233,222,.5); }
+.pr-label { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--tx4); }
+.pr-copy { font-size:10.5px; font-weight:600; color:var(--tx3); background:rgba(255,255,255,.8); border:1px solid var(--border2); border-radius:5px; padding:2px 8px; cursor:pointer; font-family:var(--ff); transition:background .15s,color .15s; }
+.pr-copy:hover{background:#fff;color:var(--tx1)}
+.pr-text { font-family:var(--fm); font-size:11.5px; color:var(--tx1); line-height:1.65; white-space:pre-wrap; padding:10px 13px; }
+
+.quote-block { border-radius:13px; padding:14px 16px; flex-shrink:0; box-shadow:var(--sh1); border-left:4px solid; }
+.quote-text { font-size:13.5px; font-weight:600; line-height:1.55; font-style:italic; color:var(--tx1); letter-spacing:-.01em; }
+.quote-auth { font-size:11px; color:var(--tx3); margin-top:6px; font-weight:600; }
+
+.final-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; flex-shrink:0; }
+.final-card { border-radius:13px; padding:12px 13px; border:1px solid var(--border); box-shadow:var(--sh1); transition:box-shadow .2s,transform .15s; }
+.final-card:hover{box-shadow:var(--sh2);transform:translateY(-1px)}
+.final-n { font-size:22px; font-weight:800; margin-bottom:3px; letter-spacing:-.02em; }
+.final-t { font-size:12px; font-weight:700; color:var(--tx1); margin-bottom:4px; }
+.final-d { font-size:11.5px; color:var(--tx2); line-height:1.45; font-weight:500; }
+
+.fn-tag { font-family:var(--fm); font-size:11.5px; background:rgba(60,52,36,.06); border:1px solid var(--border2); border-radius:5px; padding:1px 6px; color:var(--tx1); font-weight:500; }
+.kw-tag { font-weight:700; border-radius:4px; padding:0 5px; border:1px solid transparent; }
+
+.svg-wrap { flex-shrink:0; border-radius:12px; overflow:hidden; box-shadow:var(--sh2); border:1px solid var(--border); }
+
+.footer { display:flex; align-items:center; justify-content:space-between; padding:8px 20px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+.f-info { font-size:11px; color:var(--tx4); font-family:var(--fm); font-weight:500; }
+.pw { flex:1; max-width:140px; margin:0 16px; }
+.pt { height:3px; background:var(--border); border-radius:3px; overflow:hidden; }
+.pf { height:100%; border-radius:3px; transition:width .35s cubic-bezier(.4,0,.2,1),background .35s; }
+.nav { display:flex; gap:6px; }
+.btn { padding:6px 16px; font-size:12px; font-weight:700; font-family:var(--ff); border-radius:9px; border:1.5px solid var(--border2); background:var(--surface2); color:var(--tx2); cursor:pointer; transition:all .15s; box-shadow:var(--sh1); letter-spacing:-.01em; }
+.btn:hover{background:#fff;box-shadow:var(--sh2);transform:translateY(-1px)}
+.btn:active{transform:scale(.97);box-shadow:var(--sh1)}
+.btn:disabled{opacity:.3;pointer-events:none;box-shadow:none}
+.btn.primary { background:var(--tab-bg); color:var(--tab-c); border-color:var(--tab-mid); }
+.btn.primary:hover{filter:brightness(.97)}
+
+.toc-panel { position:absolute; top:calc(100% + 6px); right:0; width:320px; max-height:340px; background:var(--tx1); border-radius:13px; box-shadow:0 8px 32px rgba(28,25,21,.22),0 2px 8px rgba(28,25,21,.12); overflow:hidden; display:flex; flex-direction:column; z-index:200; opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .18s ease,transform .18s ease; }
+.toc-panel.visible{opacity:1;pointer-events:auto;transform:translateY(0)}
+.toc-scroll { overflow-y:auto; padding:8px 6px; flex:1; }
+.toc-scroll::-webkit-scrollbar{width:3px} .toc-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:3px}
+.toc-item { display:flex; align-items:flex-start; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer; transition:background .12s; }
+.toc-item:hover{background:rgba(255,255,255,.08)}
+.toc-item.active{background:rgba(255,255,255,.12)}
+.toc-num { font-size:11px; font-weight:700; font-family:var(--fm); flex-shrink:0; width:20px; padding-top:1px; transition:color .12s; }
+.toc-text { font-size:12px; font-weight:500; font-family:var(--ff); line-height:1.45; transition:color .12s; }
+.toc-item.active .toc-num, .toc-item.active .toc-text{color:#ffffff}
+.toc-item:not(.active) .toc-num{color:rgba(255,255,255,.35)}
+.toc-item:not(.active) .toc-text{color:rgba(255,255,255,.45)}
+.toc-item:not(.active):hover .toc-num{color:rgba(255,255,255,.65)}
+.toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="course-badge">Вайбкодинг · Агентные системы</span>
+      <span class="course-title">Тайминг. Практикум. День 1 ч1 · Никита Велс</span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+  <div class="stripe" id="stripe"></div>
+  <div class="body" id="body"></div>
+  <div class="footer">
+    <span class="f-info" id="finfo"></span>
+    <div class="pw"><div class="pt"><div class="pf" id="pf" style="width:6%"></div></div></div>
+    <div class="nav">
+      <button class="btn" id="pb" onclick="go(-1)" disabled>← Назад</button>
+      <button class="btn primary" id="nb" onclick="go(1)">Далее →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var T={
+  concept:{lbl:'Концепция',   c:'#2562B0',bg:'#ECF2FB',mid:'#B8D0EF',pale:'#F4F8FE',stripe:'#2562B0'},
+  method: {lbl:'Методология', c:'#2E6E2E',bg:'#EBF5EB',mid:'#B0D4B0',pale:'#F3FAF3',stripe:'#2E6E2E'},
+  demo:   {lbl:'Демонстрация',c:'#96580F',bg:'#FAF0E4',mid:'#DEB882',pale:'#FDF8F0',stripe:'#96580F'},
+  final:  {lbl:'Итоги',       c:'#4C3FA0',bg:'#EDEAFA',mid:'#BEB6E6',pale:'#F5F4FC',stripe:'#4C3FA0'}
+};
+
+var PR = {};
+
+var BODY = {
+  "00": "<p>Никита выстраивает первую часть практикума в три хода. Сначала — вступление, где он снимает ожидания и задаёт формат: не лекция для слушателей, а живая работа. Затем — технический онбординг: Claude Code в VS Code, настройки ByPass Permissions, рекомендованные расширения. И только после этого — центральная демонстрация: написание instructions.md для агентной системы «AICретарь». Логика такова: нельзя собирать агентную систему, не понимая среды и не имея главного принципа — сначала твои слова, потом инструмент превращает их в структуру.</p>\n<table style=\"width:100%;border-collapse:collapse;margin-top:10px\">\n<thead><tr><th style=\"font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)\">#</th><th style=\"font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)\">Риторическая роль</th><th style=\"font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)\">Ключевой ход автора</th></tr></thead>\n<tbody>\n<tr><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">1</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Открытие / мотивация</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Задаёт формат («несколько часов живой работы») и создаёт мотивацию через приз и доверие («пришло 800 человек — мы в восторге»)</td></tr>\n<tr><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">2</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Инструктаж-практика</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Объясняет настройку окружения Claude Code — от settings.json до расширений VS Code — как обязательный фундамент перед сборкой агентов</td></tr>\n<tr><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">3</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Демонстрация + практика</td><td style=\"color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px\">Показывает, как писать instructions.md на живом примере: пять агентов системы «AICретарь», принципы детализации, разница между скилами и агентами</td></tr>\n</tbody></table>",
+  "01": "<p><strong>Ключевая мысль:</strong> Практикум — это несколько часов живой работы над агентной системой с нуля; формат выбран намеренно, чтобы каждый видел конкретные шаги и мог потом повторить за спикером.</p><p>Сегодня у нас <strong>практикум</strong>, и я сразу хочу сказать: мы будем работать несколько часов. Поэтому если вы сейчас в дороге, в машине или где-то в неподготовленном месте — пожалуйста, освободите время и подготовьтесь. Это не формат «послушал и пошёл».</p><p><strong>Тема, которую мы выбрали, — не случайная.</strong> Я сейчас много общаюсь с разными людьми, в том числе с теми, кто активно пользуется <strong>AI</strong>, и, в принципе, мало кто понимает, что такое <strong>агентные системы</strong>, для чего они нужны и как с ними работать. Вы большие молодцы, что сюда пришли, — потому что это действительно знает очень маленький процент людей.</p><p>Мы будем собирать агентную систему с нуля. Я сразу говорю: мы не будем делать прямо суперсложную — на сложную нужно очень много времени, и за несколько часов мы её не сделаем. <strong>Но у вас будет понимание того, как агентные системы строятся, и вы сможете собрать такую же без больших временных и денежных затрат.</strong></p><p>Я специально почти ничего не готовил заранее — только короткое описание той системы, которую мы сегодня делаем. Всё остальное в прямом эфире: вы видите конкретно, что я делаю, какие функции запускаю, и можете потом повторить за мной.</p><p>В конце я вам отдам кастомного <strong>Telegram-бота</strong> с интеграцией — мы специально сделали её для этого практикума, я её нигде не публиковал. Чуть позже расскажу, для чего она нужна.</p><p>Каждого участника мы будем трекать: кто сдал <strong>домашку</strong>, кто нет. <strong>За лучший проект — MacBook Air на 15 дюймов.</strong> Изначально планировали MacBook Neo, но в связи с тем, что людей пришло значительно больше, чем мы ожидали, решили сделать апгрейд. Мы рассчитывали человек на 300, максимум 400 — пришло 800. С командой сидим в таком приятном восторге, вот.</p><p>Договорились о формате. Теперь, прежде чем мы начнём собирать агентную систему, нам нужно настроить рабочую среду — без этого ничего не заработает.</p>",
+  "02": "<p><strong>Ключевая мысль:</strong> Рабочая среда — не вторичный вопрос: правильно настроенный <strong>Claude Code в VS Code</strong> с режимом ByPass Permissions и тремя ключевыми расширениями — это фундамент, без которого собирать агентов нельзя.</p><p>Смотрите, у меня здесь открыт <strong>Claude Code в VS Code</strong>, и я работаю в режиме <strong>ByPass Permissions</strong>. По умолчанию этот режим не активен — это важный момент, потому что у многих был вопрос. Почему VS Code? Потому что здесь очень удобно работать с файлами: справа — диалог с клодом, в центре — файл, слева — дерево папок. Вы видите конкретно, что редактирует ваш клод-код, и можете сразу открыть любой файл. В десктопном приложении клода этого нет.</p><div style=\"background:#FAF0E4;border-left:3px solid #96580F;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Демонстрация:</strong> Никита показывает экран VS Code с открытым Claude Code — справа диалог, в центре файл, слева дерево папок. Видно режим ByPass Permissions в интерфейсе.</div><p>Вот почему я настоятельно рекомендую установить <strong>терминальный Claude Code</strong>, а не только расширение. В расширении недоступны <strong>Agent Teams</strong> и некоторые другие функции, которые нам сегодня понадобятся. Установить терминальный клод на Mac/Linux и на Windows — разные команды, ссылки кинем в канал.</p><p>Как включить ByPass Permissions прямо сейчас? Самое простое:</p><div style=\"background:#ECF2FB;border-left:3px solid #2562B0;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Лайфхак:</strong> Вставьте в ваш Claude Code промт «Внеси в глобальные настройки settings.json режим работы Bypass Permissions по умолчанию». Он спросит подтверждение, внесёт изменения. После этого нажимаете Ctrl+Shift+P, выбираете Reload Window — и у вас режим активирован.</div><p>Если хотите сразу получить мои настройки целиком, я публикую в канале файл <strong>settings.json</strong>. Там прописаны: ByPass Permissions, Agent Teams, список разрешённых команд и запрещённых — это тоже важно, чтобы агент не запускал то, что ему не нужно автоматически. Один раз принимаете разрешение, перезапускаете окно — всё работает.</p><p>Расширения, которые я рекомендую установить:</p><ul style=\"margin:4px 0 9px 18px;padding:0\"><li style=\"margin-bottom:4px\"><strong>Claude Status Bar</strong> — показывает ваши текущие лимиты прямо здесь снизу, перед глазами</li><li style=\"margin-bottom:4px\"><strong>Office Viewer</strong> — очень удобно для работы с Excel, CSV и вордовскими файлами прямо внутри VS Code, не нужно открывать отдельные программы</li><li style=\"margin-bottom:4px\"><strong>Claude Notifier</strong> — потому что клод иногда думает 30–40 минут, и нужен звуковой сигнал о том, что он закончил или спрашивает разрешение</li></ul><p>Все ссылки кинем в канал после эфира.</p><p>Кстати, <strong>прокси</strong> тоже можно подключить прямо внутри VS Code — тогда отдельный VPN не нужен.</p><div style=\"background:#FAF0E4;border-left:3px solid #96580F;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Важно:</strong> <strong>Antigravity</strong> подходит для простых агентных систем, но у него нет субагентов. А нам сегодня субагенты нужны будут обязательно — именно поэтому работаем в Claude Code.</div><p>Итак, с окружением разобрались. Теперь возвращаемся к нашей агентной системе — точнее, к тому, с чего она начинается: с описания того, чего мы вообще хотим.</p>",
+  "03": "<p><strong>Ключевая мысль:</strong> Агентная система начинается не с кода, а с <strong>instructions.md</strong> — неформального описания своими словами того, что каждый агент должен делать; именно это описание, написанное без нейросети, определяет качество всей системы на выходе.</p><p>Смотрите, у нас есть <strong>Markdown-файл</strong> под названием <strong>instructions.md</strong>. По сути, это не инструкция в техническом смысле — это ваши хотелки, продуктовые требования, написанные своими словами.</p><div style=\"background:#FAF0E4;border-left:3px solid #96580F;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Важно:</strong> Не пробуйте писать instructions.md через нейросеть. Если вы это всё напишете через нейросеть, вы получите просто неработающую агентную систему либо систему, которая будет делать ерунду. Нужны именно ваши мысли, ваше видение того, что вы хотите получить.</div><p>Систему, которую мы собираем сегодня, я назвал <strong>«AICретарь»</strong> — личный исполнительный ассистент. Делает руками за меня всю рутину: документы, учёт денег, поиск информации, напоминания. Состоит из пяти агентов.</p><div style=\"background:#FAF0E4;border-left:3px solid #96580F;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Демонстрация:</strong> Никита открывает файл instructions.md с уже написанным описанием системы «AICретарь» и разделами для каждого агента — координатора, юриста, финансового, ресёрч-агента, ассистента.</div><p><strong>Первый — координатор.</strong> Его задача — понимать, к какому агенту относится каждый запрос. И этот координатор у нас совмещается с <strong>CLAUDE.md</strong> — главным файлом, который клод читает при каждом новом диалоге. Там описаны все агенты, кто для чего нужен, в каких случаях кого запускать, архитектура проекта, правила запуска. Это наш главный файл.</p><p><strong>Второй — агент-юрист.</strong> Это должен быть профессиональный юрист РФ с пятнадцатилетним стажем, специализирующийся на документах. Его задачи: глубокая аналитика документов, которые я загружаю (любого формата и расширения); поиск правовых норм РФ и сверка с ними; проверка на подводные камни, уязвимости и несоответствия законодательству; итоговый отчёт с положительными, отрицательными сторонами и рисками. И второй режим — создание документов: если ранее загруженный документ был проанализирован, агент создаёт исправленную копию. Если документа изначально нет — задаёт список уточняющих вопросов, после чего пишет документ с учётом всех законодательных норм. Форматы: PDF и Word через скилы, <strong>Google Docs</strong> через <strong>MCP</strong>.</p><p><strong>Третий — финансовый агент.</strong> Получает на вход либо сумму с описанием, либо скриншот из банка, либо счёт-фактуру — и вносит в финансовую <strong>Google Sheets</strong>. Перед этим сам создаёт шаблон таблицы: три листа — дашборд (красиво оформлен, с графиками по категориям, детализация по дням), лист расходов (дата, сумма, категория), лист доходов (дата, сумма). Агент автоматически определяет тип платежа — доход или расход. Если не уверен, или не понимает категорию — уточняет у пользователя следующим сообщением. По запросу пользователя подключается к таблице и выдаёт аналитику: расходы за прошлый месяц, доходы и так далее.</p><p><strong>Четвёртый — ресёрч-агент.</strong> Подключается к <strong>MCP Firecrawl</strong> — для парсинга сайтов — и <strong>Brave Search</strong> — для поиска в интернете. Получает тему, анализирует её, собирает информацию из разных источников, формирует отчёт в Google Docs через MCP. В перспективе можно добавить ресёрч по соцсетям.</p><p><strong>Пятый — ассистент-календарь.</strong> Подключается к <strong>Google Calendar</strong> через MCP. Четыре основных задачи:</p><ol style=\"margin:4px 0 9px 18px\"><li style=\"margin-bottom:4px\">Получать список встреч и задач на сегодня и на неделю вперёд</li><li style=\"margin-bottom:4px\">По запросу выдавать события на конкретный день</li><li style=\"margin-bottom:4px\">Вносить события, проверяя наличие свободного времени</li><li style=\"margin-bottom:4px\">Предлагать варианты оптимизации расписания — переносить события, сжимать временные блоки, говорить, когда можно поставить новую задачу</li></ol><p>Вот в чём <strong>принцип детализации</strong>. Здесь есть две крайности: слишком мало информации и слишком много. <strong>Если мы сделаем документ слишком огромный, мы перегрузим контекст агента — и на выходе получим плохо проработанный результат.</strong> Поэтому первая итерация — верхнеуровневая, потом мы проходимся по каждому агенту точечно и дорабатываем.</p><div style=\"background:#ECF2FB;border-left:3px solid #2562B0;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:12.5px;line-height:1.55\"><strong>Лайфхак:</strong> Не пытайтесь сразу написать суперподробную инструкцию для каждого агента. Начните с верхнего уровня, запустите — и потом уже дорабатывайте точечно там, где агент делает что-то не то.</div><p>По поводу разницы между <strong>скилами</strong> и <strong>агентами</strong> — был вопрос в чате. Скилы нужны тогда, когда агенту не хватает информации для задачи: он подключается к внешнему скилу и получает её. В агентах прописан порядок действий, и главный оркестратор жёстко контролирует, в каком случае запускать каждого субагента. В скилах клод сам решает, коррелирует ли скил с запросом — это немного другая логика. <strong>На 5–6 агентах разница небольшая. Но когда агентов 20–30 — разница очень большая.</strong></p><p>Итак, главная инструкция нашего агента написана. Следующий шаг — создать папку с markdown-файлами для каждого субагента и раскидать их туда, а потом подключить к <strong>CLAUDE.md</strong> и запускать в режиме <strong>Agent Teams</strong>.</p>"
+};
+
+var RIGHT = {
+  "00": "<div class=\"insights\"></div>",
+  "01": "<div class=\"insights\"><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Формат практикума:</strong> несколько часов живой работы — участники должны освободить время и сидеть за компьютером, не в дороге</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Агентные системы</strong> — тема, которую знает очень маленький процент людей, даже среди активных пользователей AI; аудитория молодцы, что пришла</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Агентная система с нуля:</strong> не суперсложная, но достаточная, чтобы у каждого сложилось понимание принципа и возможность собрать свою</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Принцип живого эфира:</strong> Никита специально почти ничего не готовил заранее — только короткое описание системы; всё делается вживую, чтобы можно было повторить</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Telegram-бот</strong> с кастомной интеграцией — специально сделан для практикума, нигде не публиковался; отдаётся в конце</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>Домашнее задание</strong> трекают: кто сдал — кто нет; лучший проект получает <strong>MacBook Air 15&quot;</strong> (апгрейд от изначального MacBook Neo)</div><div class=\"insight\" style=\"border-left-color:#2562B0\"><strong>800 человек</strong> пришло вместо ожидаемых 300–400 — команда «в приятном восторге»</div></div>",
+  "02": "<div class=\"insights\"><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>Claude Code в VS Code</strong> — рекомендованная среда: удобная работа с файлами прямо в интерфейсе, виден каждый шаг редактирования</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>ByPass Permissions:</strong> по умолчанию отключён; включается через settings.json или через прямой промт, затем Ctrl+Shift+P → Reload Window</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>settings.json</strong> содержит: ByPass Permissions, Agent Teams, разрешённые и запрещённые команды — файл публикуется в канале после эфира</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>Терминальный Claude Code</strong> открывает возможности, недоступные в расширении: Agent Teams, статус-бар в терминале</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>Расширения VS Code:</strong> Claude Status Bar (показывает лимиты), Office Viewer (Excel/CSV/Word внутри VS Code), Claude Notifier (звуковой сигнал о завершении задачи)</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>Прокси</strong> можно подключить прямо внутри VS Code — VPN тогда не нужен</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\"><strong>Antigravity:</strong> подходит для простых агентов, но не поддерживает субагентов — критично для Agent Teams</div><div class=\"insight\" style=\"border-left-color:#2E6E2E\">Все <strong>материалы</strong> (промты, настройки, ссылки) публикуются в канале сразу после эфира</div></div>",
+  "03": "<div class=\"insights\"><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>instructions.md</strong> — стартовый файл: неформальный текст своими словами о хотелках от каждого агента; нейросетью писать нельзя — «мусор на входе, мусор на выходе»</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>«AICретарь»</strong> — личный исполнительный ассистент из пяти агентов: координатор (= CLAUDE.md), юрист, финансовый, ресёрч-агент, ассистент-календарь</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>CLAUDE.md</strong> совмещает роль главного координатора: читается при каждом диалоге, описывает архитектуру, агентов, правила запуска</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Агент-юрист:</strong> глубокая аналитика юридических документов, проверка на подводные камни и уязвимости, создание новых документов (PDF, Word, Google Docs через MCP)</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Финансовый агент:</strong> получает сумму/скриншот из банка/счёт-фактуру, вносит в Google Sheets; шаблон — три листа: дашборд с графиками, лист расходов, лист доходов; если тип неясен — уточняет у пользователя</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Ресёрч-агент:</strong> подключается к MCP Firecrawl + Brave Search, собирает информацию по теме, формирует отчёт в Google Docs</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Ассистент-календарь:</strong> подключается к Google Calendar через MCP; задачи — список встреч на день/неделю, внесение событий, оптимизация расписания</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Принцип детализации:</strong> не слишком мало, не слишком много — перегруженный контекст даёт плохой результат; первая итерация верхнеуровневая, потом доработка точечно</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Скилы vs агенты:</strong> скилы подгружаются по совпадению запроса; агенты запускаются по чётким условиям из координатора; при 20–30 агентах разница принципиальная</div><div class=\"insight\" style=\"border-left-color:#96580F\"><strong>Следующий шаг</strong> после instructions.md: создать папку с markdown-файлами для каждого субагента и подключить их к CLAUDE.md</div></div>"
+};
+
+var SEG = [
+  {"id": "00", "type": "concept", "title": "Логическая реконструкция", "timing": ""},
+  {"id": "01", "type": "concept", "title": "Вступление и формат практикума", "timing": "00:00–05:44"},
+  {"id": "02", "type": "method", "title": "Настройка окружения Claude Code", "timing": "05:44–29:34"},
+  {"id": "03", "type": "demo", "title": "Написание инструкций для агентной системы «AICретарь»", "timing": "29:34–01:03:24"}
+];
+
+function cp(id){
+  var btn=document.getElementById('cpb'+id);
+  if(!btn)return;
+  var textEl=btn.closest('.pr-block').querySelector('.pr-text');
+  var text=textEl?textEl.textContent:'';
+  navigator.clipboard.writeText(text).then(function(){
+    btn.textContent='скопировано';
+    setTimeout(function(){btn.textContent='копировать';},1800);
+  }).catch(function(){});
+}
+
+var cur=0;
+
+function setTypeVars(t){
+  document.documentElement.style.setProperty('--tab-bg',t.bg);
+  document.documentElement.style.setProperty('--tab-c',t.c);
+  document.documentElement.style.setProperty('--tab-mid',t.mid);
+}
+
+function render(){
+  var s=SEG[cur];
+  var t=T[s.type];
+  var total=SEG.length<10?'0'+SEG.length:''+SEG.length;
+  var pct=Math.round((cur+1)/SEG.length*100)+'%';
+  document.getElementById('stripe').style.background=t.stripe;
+  document.getElementById('pf').style.width=pct;
+  document.getElementById('pf').style.background=t.stripe;
+  setTypeVars(t);
+  document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('on',i===cur);});
+  document.getElementById('pb').disabled=cur===0;
+  document.getElementById('nb').textContent=cur===SEG.length-1?'В начало →':'Далее →';
+  document.getElementById('finfo').textContent='Сегмент '+s.id+' из '+total+' · '+s.timing;
+  document.getElementById('body').innerHTML=
+    '<div class="lcol">'
+      +'<span class="seg-pill" style="color:'+t.c+';background:'+t.bg+';border:1px solid '+t.mid+';box-shadow:0 1px 4px '+t.mid+'60">'
+        +'<span class="seg-dot" style="background:'+t.c+'"></span>'
+        +t.lbl
+      +'</span>'
+      +'<div class="seg-title">'+s.title+'</div>'
+      +'<div class="seg-timing">'+s.timing+'</div>'
+      +'<div class="seg-body">'+BODY[s.id]+'</div>'
+    +'</div>'
+    +'<div class="rcol" style="background:'+t.pale+'">'
+      +'<div class="rcol-inner">'+RIGHT[s.id]+'</div>'
+    +'</div>';
+}
+
+function go(d){
+  if(d===1&&cur===SEG.length-1)cur=0;
+  else if(d===-1&&cur===0)return;
+  else cur+=d;
+  render();
+}
+
+var tocPanel=document.createElement('div');
+tocPanel.className='toc-panel';
+var tocScroll=document.createElement('div');
+tocScroll.className='toc-scroll';
+tocPanel.appendChild(tocScroll);
+var te=document.getElementById('tabs');
+te.style.position='relative';
+te.appendChild(tocPanel);
+
+function buildToc(hoverIdx){
+  var hi=(hoverIdx!==undefined)?hoverIdx:cur;
+  tocScroll.innerHTML='';
+  SEG.forEach(function(s,i){
+    var item=document.createElement('div');
+    item.className='toc-item'+(i===hi?' active':'');
+    item.innerHTML='<span class="toc-num">'+s.id+'</span><span class="toc-text">'+s.title+'</span>';
+    item.addEventListener('mousedown',function(e){e.preventDefault();cur=i;render();hideToc();});
+    tocScroll.appendChild(item);
+  });
+}
+
+var tocVisible=false;
+var hideTimer=null;
+
+function showToc(hoverIdx){clearTimeout(hideTimer);buildToc(hoverIdx);tocPanel.classList.add('visible');tocVisible=true;var ae=tocScroll.querySelector('.active');if(ae)ae.scrollIntoView({block:'nearest'});}
+function hideToc(){clearTimeout(hideTimer);hideTimer=setTimeout(function(){tocPanel.classList.remove('visible');tocVisible=false;},120);}
+
+SEG.forEach(function(s,i){
+  var wrap=document.createElement('div');
+  wrap.className='tab-wrap';
+  var btn=document.createElement('button');
+  btn.className='tab'+(i===0?' on':'');
+  btn.textContent=s.id;
+  btn.onclick=function(){cur=i;render();hideToc();};
+  btn.addEventListener('mouseenter',(function(idx){return function(){showToc(idx);};})(i));
+  wrap.appendChild(btn);
+  te.insertBefore(wrap,tocPanel);
+});
+
+tocPanel.addEventListener('mouseenter',function(){clearTimeout(hideTimer);});
+tocPanel.addEventListener('mouseleave',hideToc);
+te.addEventListener('mouseleave',function(e){if(!tocPanel.contains(e.relatedTarget))hideToc();});
+
+render();
+</script>
+</body>
+</html>
