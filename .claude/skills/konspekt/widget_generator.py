@@ -298,6 +298,32 @@ def js_arr(segments):
     return '[\n' + ',\n'.join(items) + '\n]'
 
 
+def build_reconstruction_html(recon):
+    if not recon:
+        return ''
+    prose = recon.get('prose', '')
+    table_rows = recon.get('table', [])
+    parts = [f'<p>{prose}</p>']
+    if table_rows:
+        cell = 'style="color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px"'
+        th   = 'style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)"'
+        parts += [
+            '<table style="width:100%;border-collapse:collapse;margin-top:10px">',
+            f'<thead><tr><th {th}>#</th><th {th}>Риторическая роль</th><th {th}>Ключевой ход автора</th></tr></thead>',
+            '<tbody>',
+        ]
+        for row in table_rows:
+            parts.append(
+                f'<tr>'
+                f'<td {cell}>{row.get("segment","")}</td>'
+                f'<td {cell}>{row.get("role","")}</td>'
+                f'<td {cell}>{row.get("move","")}</td>'
+                f'</tr>'
+            )
+        parts += ['</tbody></table>']
+    return '\n'.join(parts)
+
+
 def build_html(data):
     meta     = data['meta']
     prompts  = data.get('prompts', {})
@@ -309,8 +335,12 @@ def build_html(data):
     body_dict  = {s['id']: s['body']  for s in segments}
     right_dict = {s['id']: s['right'] for s in segments}
 
-    # PR больше не нужен в JS — cp() читает текст из DOM (.pr-text)
-    # Сохраняем для обратной совместимости (пустой объект если промптов нет)
+    recon = data.get('reconstruction')
+    if recon:
+        body_dict  = {'00': build_reconstruction_html(recon), **body_dict}
+        right_dict = {'00': '<div class="insights"></div>', **right_dict}
+        segments   = [{'id': '00', 'type': 'concept', 'title': 'Логическая реконструкция', 'timing': ''}] + list(segments)
+
     pr_js    = 'var PR = ' + js_obj(prompts) + ';'
     body_js  = 'var BODY = ' + js_obj(body_dict) + ';'
     right_js = 'var RIGHT = ' + js_obj(right_dict) + ';'
