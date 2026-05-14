@@ -298,12 +298,17 @@ def js_arr(segments):
     return '[\n' + ',\n'.join(items) + '\n]'
 
 
+def build_timeline_html(trajectory):
+    # stub — will be implemented in Task 6
+    return ''
+
+
 def build_reconstruction_html(recon):
     if not recon:
         return ''
     prose = recon.get('prose', '')
     table_rows = recon.get('table', [])
-    parts = [f'<p>{prose}</p>']
+    parts = [prose]
     if table_rows:
         cell = 'style="color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px"'
         th   = 'style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)"'
