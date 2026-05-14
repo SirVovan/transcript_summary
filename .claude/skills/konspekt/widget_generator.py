@@ -158,7 +158,15 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 .toc-item:not(.active) .toc-num{color:rgba(255,255,255,.35)}
 .toc-item:not(.active) .toc-text{color:rgba(255,255,255,.45)}
 .toc-item:not(.active):hover .toc-num{color:rgba(255,255,255,.65)}
-.toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}"""
+.toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}
+
+.tl-prose{margin-bottom:16px;color:var(--tx2);font-size:13.5px;line-height:1.7}
+.tl-track{display:flex;gap:4px;width:100%;margin-top:8px}
+.tl-block{display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px;border-radius:10px;cursor:pointer;min-width:48px;transition:opacity .15s,transform .15s;overflow:hidden}
+.tl-block:hover{opacity:.85;transform:translateY(-2px)}
+.tl-move{font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-time{font-size:10px;color:rgba(255,255,255,.7);font-family:var(--fm);margin-top:3px;white-space:nowrap}
+.tl-desc{font-size:11px;color:rgba(255,255,255,.85);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}"""
 
 # ──────────────────────────────────────────────────────────────────────
 # JS ENGINE (неизменная часть — движок виджета)
@@ -166,10 +174,11 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 
 JS_T = """\
 var T={
-  concept:{lbl:'Концепция',   c:'#2562B0',bg:'#ECF2FB',mid:'#B8D0EF',pale:'#F4F8FE',stripe:'#2562B0'},
-  method: {lbl:'Методология', c:'#2E6E2E',bg:'#EBF5EB',mid:'#B0D4B0',pale:'#F3FAF3',stripe:'#2E6E2E'},
-  demo:   {lbl:'Демонстрация',c:'#96580F',bg:'#FAF0E4',mid:'#DEB882',pale:'#FDF8F0',stripe:'#96580F'},
-  final:  {lbl:'Итоги',       c:'#4C3FA0',bg:'#EDEAFA',mid:'#BEB6E6',pale:'#F5F4FC',stripe:'#4C3FA0'}
+  concept: {lbl:'Концепция',   c:'#2562B0',bg:'#ECF2FB',mid:'#B8D0EF',pale:'#F4F8FE',stripe:'#2562B0'},
+  method:  {lbl:'Методология', c:'#2E6E2E',bg:'#EBF5EB',mid:'#B0D4B0',pale:'#F3FAF3',stripe:'#2E6E2E'},
+  demo:    {lbl:'Демонстрация',c:'#96580F',bg:'#FAF0E4',mid:'#DEB882',pale:'#FDF8F0',stripe:'#96580F'},
+  final:   {lbl:'Итоги',       c:'#4C3FA0',bg:'#EDEAFA',mid:'#BEB6E6',pale:'#F5F4FC',stripe:'#4C3FA0'},
+  timeline:{lbl:'Траектория',  c:'#5A6A7A',bg:'#F0F2F5',mid:'#B0BCC8',pale:'#F5F7FA',stripe:'#5A6A7A'}
 };"""
 
 JS_ENGINE = """\
@@ -270,6 +279,10 @@ tocPanel.addEventListener('mouseenter',function(){clearTimeout(hideTimer);});
 tocPanel.addEventListener('mouseleave',hideToc);
 te.addEventListener('mouseleave',function(e){if(!tocPanel.contains(e.relatedTarget))hideToc();});
 
+function goTo(id){
+  for(var i=0;i<SEG.length;i++){if(SEG[i].id===id){cur=i;render();return;}}
+}
+
 render();"""
 
 # ──────────────────────────────────────────────────────────────────────
@@ -298,9 +311,73 @@ def js_arr(segments):
     return '[\n' + ',\n'.join(items) + '\n]'
 
 
+MOVE_COLORS = {
+    'концепт':      '#2562B0',
+    'метафора':     '#7B5EA7',
+    'пример':       '#2E6E2E',
+    'демонстрация': '#96580F',
+    'практика':     '#B07020',
+    'маркетинг':    '#C0442E',
+    'вывод':        '#5A7A5A',
+    'вопрос':       '#6A8FAF',
+}
+_DEFAULT_MOVE_COLOR = '#888888'
+
+
+def _time_str_to_seconds(s):
+    parts = s.strip().split(':')
+    try:
+        if len(parts) == 2:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    except (ValueError, IndexError):
+        pass
+    return 0
+
+
+def _move_duration(timing):
+    if '–' not in timing:
+        return 0
+    start_s, end_s = timing.split('–', 1)
+    return max(0, _time_str_to_seconds(end_s) - _time_str_to_seconds(start_s))
+
+
 def build_timeline_html(trajectory):
-    # stub — will be implemented in Task 6
-    return ''
+    if not trajectory:
+        return ''
+    prose = trajectory.get('prose', '')
+    moves = trajectory.get('moves', [])
+    if not moves:
+        return prose
+
+    durations = [_move_duration(m.get('timing', '')) for m in moves]
+    total = sum(durations) or len(moves)
+
+    parts = []
+    if prose:
+        parts.append(f'<div class="tl-prose">{prose}</div>')
+
+    parts.append('<div class="tl-track">')
+    n = len(moves)
+    for i, move in enumerate(moves):
+        raw_id = move.get('segment', str(i + 1))
+        seg_id = raw_id.zfill(2) if raw_id.isdigit() else raw_id
+        move_type = move.get('move', '')
+        timing = move.get('timing', '')
+        description = move.get('description', '')
+        color = MOVE_COLORS.get(move_type, _DEFAULT_MOVE_COLOR)
+        dur = durations[i]
+        pct = max(5, round(dur / total * 100)) if total > 0 else round(100 / n)
+        parts.append(
+            f'<div class="tl-block" style="width:{pct}%;background:{color}" onclick="goTo(\'{seg_id}\')">'
+            f'<div class="tl-move">{move_type}</div>'
+            f'<div class="tl-time">{timing}</div>'
+            f'<div class="tl-desc">{description}</div>'
+            f'</div>'
+        )
+    parts.append('</div>')
+    return '\n'.join(parts)
 
 
 def build_reconstruction_html(recon):
@@ -345,6 +422,13 @@ def build_html(data):
         body_dict  = {'00': build_reconstruction_html(recon), **body_dict}
         right_dict = {'00': '<div class="insights"></div>', **right_dict}
         segments   = [{'id': '00', 'type': 'concept', 'title': 'Логическая реконструкция', 'timing': ''}] + list(segments)
+
+    trajectory = data.get('trajectory')
+    if trajectory:
+        tl_html    = build_timeline_html(trajectory)
+        body_dict  = {'TL': tl_html, **body_dict}
+        right_dict = {'TL': '', **right_dict}
+        segments   = [{'id': 'TL', 'type': 'timeline', 'title': 'Траектория', 'timing': ''}] + list(segments)
 
     pr_js    = 'var PR = ' + js_obj(prompts) + ';'
     body_js  = 'var BODY = ' + js_obj(body_dict) + ';'
