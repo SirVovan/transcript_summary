@@ -100,15 +100,47 @@
   /* SVG CANVAS */
   .canvas-wrap {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     position: relative;
+    touch-action: none;
   }
 
   #arch-svg {
     display: block;
     width: 100%;
-    min-width: 900px;
+    height: 100%;
+    cursor: grab;
   }
+
+  #arch-svg.panning { cursor: grabbing; }
+
+  .zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .zoom-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    opacity: 0.85;
+  }
+
+  .zoom-btn:hover { opacity: 1; background: var(--bg3); }
 
   /* DETAIL PANEL */
   .detail-panel {
@@ -271,8 +303,9 @@
   <div class="topbar-hint">Кликните на узел для деталей</div>
 </div>
 
-<div class="canvas-wrap">
+<div class="canvas-wrap" id="canvas-wrap">
 <svg id="arch-svg" xmlns="http://www.w3.org/2000/svg">
+<g id="zoom-layer">
 <defs>
   <marker id="arrow-main" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
     <polygon points="0 0, 8 3, 0 6" class="arrow-main"/>
@@ -642,7 +675,13 @@
 </g>
 <!-- END graph-full -->
 
+</g><!-- end zoom-layer -->
 </svg>
+<div class="zoom-controls">
+  <button class="zoom-btn" onclick="zoomBy(1.3)" title="Приблизить">+</button>
+  <button class="zoom-btn" onclick="zoomBy(1/1.3)" title="Отдалить">−</button>
+  <button class="zoom-btn" onclick="zoomReset()" title="Сбросить" style="font-size:13px;">⌂</button>
+</div>
 </div>
 
 <!-- DETAIL PANEL -->
@@ -934,6 +973,100 @@ document.getElementById('arch-svg').addEventListener('click', function(e) {
   });
 
   showPanel(nodeId);
+});
+
+// ── Pan / Zoom ──────────────────────────────────────────────
+const svgEl = document.getElementById('arch-svg');
+const zoomLayer = document.getElementById('zoom-layer');
+let vx = 0, vy = 0, vscale = 1;
+let dragging = false, lastX = 0, lastY = 0;
+
+function applyTransform() {
+  zoomLayer.setAttribute('transform', `translate(${vx},${vy}) scale(${vscale})`);
+}
+
+function zoomBy(factor, cx, cy) {
+  const wrap = document.getElementById('canvas-wrap');
+  if (cx === undefined) { cx = wrap.clientWidth / 2; cy = wrap.clientHeight / 2; }
+  const svgRect = svgEl.getBoundingClientRect();
+  const px = (cx - svgRect.left) / svgRect.width * svgEl.viewBox.baseVal.width;
+  const py = (cy - svgRect.top)  / svgEl.viewBox.baseVal.height * svgEl.viewBox.baseVal.height;
+  const worldX = (px - vx) / vscale;
+  const worldY = (py - vy) / vscale;
+  vscale = Math.min(Math.max(vscale * factor, 0.15), 5);
+  vx = px - worldX * vscale;
+  vy = py - worldY * vscale;
+  applyTransform();
+}
+
+function zoomReset() {
+  vx = 0; vy = 0; vscale = 1;
+  applyTransform();
+}
+
+// Mouse drag
+svgEl.addEventListener('mousedown', e => {
+  if (e.target.closest('.node-group[data-id]')) return;
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  svgEl.classList.add('panning');
+  e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const dx = (e.clientX - lastX) / svgEl.getBoundingClientRect().width * svgEl.viewBox.baseVal.width;
+  const dy = (e.clientY - lastY) / svgEl.getBoundingClientRect().height * svgEl.viewBox.baseVal.height;
+  vx += dx; vy += dy; lastX = e.clientX; lastY = e.clientY;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { dragging = false; svgEl.classList.remove('panning'); });
+
+// Wheel zoom
+svgEl.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomBy(e.deltaY < 0 ? 1.12 : 1/1.12, e.clientX, e.clientY);
+}, { passive: false });
+
+// Touch: pinch-to-zoom + pan
+let touches = [];
+let lastDist = 0, lastMidX = 0, lastMidY = 0;
+
+svgEl.addEventListener('touchstart', e => {
+  touches = Array.from(e.touches);
+  if (touches.length === 2) {
+    lastDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    lastMidX = (touches[0].clientX + touches[1].clientX) / 2;
+    lastMidY = (touches[0].clientY + touches[1].clientY) / 2;
+  } else if (touches.length === 1) {
+    lastX = touches[0].clientX; lastY = touches[0].clientY;
+  }
+}, { passive: true });
+
+svgEl.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = Array.from(e.touches);
+  if (t.length === 2) {
+    const dist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const midX = (t[0].clientX + t[1].clientX) / 2;
+    const midY = (t[0].clientY + t[1].clientY) / 2;
+    if (lastDist > 0) zoomBy(dist / lastDist, midX, midY);
+    const svgRect = svgEl.getBoundingClientRect();
+    const dx = (midX - lastMidX) / svgRect.width * svgEl.viewBox.baseVal.width;
+    const dy = (midY - lastMidY) / svgRect.height * svgEl.viewBox.baseVal.height;
+    vx += dx; vy += dy;
+    applyTransform();
+    lastDist = dist; lastMidX = midX; lastMidY = midY;
+  } else if (t.length === 1) {
+    const svgRect = svgEl.getBoundingClientRect();
+    const dx = (t[0].clientX - lastX) / svgRect.width * svgEl.viewBox.baseVal.width;
+    const dy = (t[0].clientY - lastY) / svgRect.height * svgEl.viewBox.baseVal.height;
+    vx += dx; vy += dy; lastX = t[0].clientX; lastY = t[0].clientY;
+    applyTransform();
+  }
+}, { passive: false });
+
+svgEl.addEventListener('touchend', e => {
+  touches = Array.from(e.touches);
+  lastDist = 0;
 });
 
 // Init
