@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Архитектура /konspekt</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0D1117;
+    --bg2: #161B22;
+    --bg3: #1F2937;
+    --border: #30363D;
+    --text: #E2E8F0;
+    --text-muted: #8B949E;
+
+    --instruction-bg: #1A2040;
+    --instruction-stroke: #4F6EF5;
+    --script-bg: #2A1E08;
+    --script-stroke: #F5A623;
+    --artifact-bg: #1A1D24;
+    --artifact-stroke: #4A5568;
+    --subagent-bg: #1E1430;
+    --subagent-stroke: #9B6AF5;
+    --brigadir-bg: #2A2008;
+    --brigadir-stroke: #F5C842;
+    --checkpoint-stroke: #F56565;
+    --profile-stroke: #7B8FA6;
+    --profile-bg: #1A2030;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 16px;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .topbar-title span {
+    font-family: monospace;
+    color: var(--instruction-stroke);
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .mode-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .mode-btn.active {
+    background: var(--bg2);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+
+  .topbar-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* SVG CANVAS */
+  .canvas-wrap {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+  }
+
+  #arch-svg {
+    display: block;
+    width: 100%;
+    min-width: 900px;
+  }
+
+  /* DETAIL PANEL */
+  .detail-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px 20px;
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    z-index: 100;
+    max-height: 42vh;
+    overflow-y: auto;
+  }
+
+  .detail-panel.open {
+    transform: translateY(0);
+  }
+
+  .detail-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+
+  .detail-close:hover { color: var(--text); }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .detail-name {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .detail-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .badge-instruction { background: var(--instruction-bg); color: var(--instruction-stroke); border: 1px solid var(--instruction-stroke); }
+  .badge-script { background: var(--script-bg); color: var(--script-stroke); border: 1px solid var(--script-stroke); }
+  .badge-artifact { background: var(--artifact-bg); color: #8B949E; border: 1px solid var(--artifact-stroke); }
+  .badge-subagent { background: var(--subagent-bg); color: var(--subagent-stroke); border: 1px solid var(--subagent-stroke); }
+  .badge-brigadir { background: var(--brigadir-bg); color: var(--brigadir-stroke); border: 1px solid var(--brigadir-stroke); }
+  .badge-profile { background: var(--profile-bg); color: var(--profile-stroke); border: 1px solid var(--profile-stroke); }
+
+  .detail-role {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .detail-io {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 600px) { .detail-io { grid-template-columns: 1fr; } }
+
+  .detail-io-section h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .detail-io-section ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .detail-io-section li {
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--text);
+    padding: 3px 8px;
+    background: var(--bg3);
+    border-radius: 4px;
+    border-left: 2px solid var(--border);
+  }
+
+  .detail-io-section.accepts li { border-left-color: #4F6EF5; }
+  .detail-io-section.produces li { border-left-color: #4CAF82; }
+
+  /* SVG styles */
+  .node-group { cursor: pointer; }
+  .node-group:hover .node-rect { filter: brightness(1.2); }
+  .node-group.selected .node-rect { stroke-width: 2.5px; filter: drop-shadow(0 0 8px currentColor); }
+  .node-group.dimmed { opacity: 0.25; pointer-events: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .subagent-card { animation: pulse 2.5s ease-in-out infinite; }
+  .subagent-card:nth-child(2) { animation-delay: 0.5s; }
+  .subagent-card:nth-child(3) { animation-delay: 1s; }
+
+  .edge { fill: none; pointer-events: none; }
+  .edge-main { stroke: #E2E8F0; stroke-width: 1.5; }
+  .edge-artifact { stroke: #4A5568; stroke-width: 1.2; stroke-dasharray: 4,3; }
+  .edge-parallel { stroke: #9B6AF5; stroke-width: 1.5; }
+  .edge-branch { stroke: #F56565; stroke-width: 1.2; stroke-dasharray: 5,3; }
+
+  .arrow-main { fill: #E2E8F0; }
+  .arrow-artifact { fill: #4A5568; }
+  .arrow-parallel { fill: #9B6AF5; }
+  .arrow-branch { fill: #F56565; }
+
+  .edge-label {
+    font-size: 10px;
+    fill: var(--text-muted);
+    font-family: monospace;
+  }
+
+  .bracket-rect { fill: rgba(155, 106, 245, 0.05); stroke: #9B6AF5; stroke-width: 1px; stroke-dasharray: 6,4; rx: 8; }
+  .bracket-label { font-size: 11px; fill: #9B6AF5; font-style: italic; }
+
+  .legend-item text { font-size: 11px; fill: var(--text-muted); }
+
+  .checkpoint-label { font-size: 10px; fill: #F56565; font-style: italic; }
+  .node-label { font-size: 12px; fill: var(--text); font-family: monospace; font-weight: 500; }
+  .node-label-small { font-size: 10px; fill: var(--text-muted); font-family: monospace; }
+  .artifact-label { font-size: 11px; fill: #8B949E; font-family: monospace; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">Архитектура скилла <span>/konspekt</span></div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="btn-light" onclick="setMode('light')">Лёгкий режим (≤25K)</button>
+    <button class="mode-btn" id="btn-full" onclick="setMode('full')">Полный режим (&gt;25K)</button>
+  </div>
+  <div class="topbar-hint">Кликните на узел для деталей</div>
+</div>
+
+<div class="canvas-wrap">
+<svg id="arch-svg" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arrow-main" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" class="arrow-main"/>
+  </marker>
+  <marker id="arrow-artifact" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" class="arrow-artifact"/>
+  </marker>
+  <marker id="arrow-parallel" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" class="arrow-parallel"/>
+  </marker>
+  <marker id="arrow-branch" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" class="arrow-branch"/>
+  </marker>
+</defs>
+
+<!-- ════════════════════════════════════════════════════════
+     ЛЁГКИЙ РЕЖИМ
+     ════════════════════════════════════════════════════════ -->
+<g id="graph-light">
+
+  <!-- Edges (рисуем до узлов, чтобы узлы перекрывали) -->
+
+  <!-- Транскрипт → preprocessor -->
+  <line class="edge edge-main" x1="130" y1="80" x2="280" y2="80" marker-end="url(#arrow-main)"/>
+
+  <!-- preprocessor → Claude (прямо) -->
+  <line class="edge edge-main" x1="430" y1="80" x2="560" y2="80" marker-end="url(#arrow-main)"/>
+  <text class="edge-label" x="488" y="73">≤25K токенов</text>
+
+  <!-- Claude → Мастер-MD -->
+  <line class="edge edge-main" x1="700" y1="80" x2="820" y2="80" marker-end="url(#arrow-main)"/>
+
+  <!-- Мастер-MD → layer2_widget -->
+  <line class="edge edge-main" x1="870" y1="107" x2="870" y2="190" marker-end="url(#arrow-main)"/>
+
+  <!-- tov_spec → Claude (пунктир сверху) -->
+  <path class="edge edge-artifact" d="M355 140 Q355 115 500 80" marker-end="url(#arrow-artifact)" stroke="#4A5568"/>
+  <text class="edge-label" x="340" y="133">ToV</text>
+
+  <!-- profiles → Claude (пунктир снизу) -->
+  <path class="edge edge-artifact" d="M355 230 Q355 160 500 95" marker-end="url(#arrow-artifact)"/>
+  <text class="edge-label" x="330" y="240">профиль</text>
+
+  <!-- layer2_widget → widget_generator -->
+  <line class="edge edge-main" x1="990" y1="215" x2="1120" y2="215" marker-end="url(#arrow-main)"/>
+
+  <!-- widget_generator → HTML-виджет -->
+  <line class="edge edge-main" x1="1240" y1="215" x2="1360" y2="215" marker-end="url(#arrow-main)"/>
+
+  <!-- УЗЛЫ -->
+
+  <!-- Транскрипт (артефакт) -->
+  <g class="node-group" data-id="transcript" data-connected="preprocessor,claude-self">
+    <path class="node-rect" d="M10 60 h100 l20 20 v40 h-120 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M110 60 v20 h20" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="60" y="83" text-anchor="middle">Транскрипт</text>
+    <text class="node-label-small" x="60" y="97" text-anchor="middle">.txt</text>
+  </g>
+
+  <!-- preprocessor.py -->
+  <g class="node-group" data-id="preprocessor" data-connected="transcript,claude-self,tov-spec,profiles">
+    <rect class="node-rect" x="280" y="56" width="150" height="48" rx="8" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="node-label" x="355" y="78" text-anchor="middle">preprocessor.py</text>
+    <text class="node-label-small" x="355" y="94" text-anchor="middle">ШАГ 0 · оценка</text>
+  </g>
+
+  <!-- tov_spec.md -->
+  <g class="node-group" data-id="tov-spec" data-connected="preprocessor,claude-self">
+    <rect class="node-rect" x="280" y="118" width="150" height="44" rx="8" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="node-label" x="355" y="138" text-anchor="middle">tov_spec.md</text>
+    <text class="node-label-small" x="355" y="153" text-anchor="middle">голос спикера</text>
+  </g>
+
+  <!-- kartograf_profiles -->
+  <g class="node-group" data-id="profiles" data-connected="preprocessor,claude-self">
+    <rect class="node-rect" x="280" y="208" width="150" height="44" rx="8" fill="#1A2030" stroke="#7B8FA6" stroke-width="1.5"/>
+    <text class="node-label" x="355" y="228" text-anchor="middle">kartograf_profile</text>
+    <text class="node-label-small" x="355" y="243" text-anchor="middle">×4 профиля</text>
+  </g>
+
+  <!-- Claude self (лёгкий режим) -->
+  <g class="node-group" data-id="claude-self" data-connected="preprocessor,tov-spec,profiles,master-md-light">
+    <rect class="node-rect" x="560" y="50" width="140" height="60" rx="10" fill="#1A2040" stroke="#4F6EF5" stroke-width="2"/>
+    <text class="node-label" x="630" y="74" text-anchor="middle">Claude</text>
+    <text class="node-label-small" x="630" y="90" text-anchor="middle">сегмент·текст·рекон.</text>
+    <text class="node-label-small" x="630" y="103" text-anchor="middle">SKILL.md</text>
+  </g>
+
+  <!-- Мастер-MD (артефакт) -->
+  <g class="node-group" data-id="master-md-light" data-connected="claude-self,layer2-widget-light">
+    <path class="node-rect" d="M820 60 h90 l20 20 v47 h-110 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M910 60 v20 h20" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="870" y="86" text-anchor="middle">Мастер-MD</text>
+    <text class="node-label-small" x="870" y="100" text-anchor="middle">*_мастер.md</text>
+  </g>
+
+  <!-- layer2_widget.md -->
+  <g class="node-group" data-id="layer2-widget-light" data-connected="master-md-light,widget-gen-light">
+    <rect class="node-rect" x="820" y="190" width="150" height="48" rx="8" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="node-label" x="895" y="210" text-anchor="middle">layer2_widget.md</text>
+    <text class="node-label-small" x="895" y="228" text-anchor="middle">MD → JSON</text>
+  </g>
+
+  <!-- widget_generator.py -->
+  <g class="node-group" data-id="widget-gen-light" data-connected="layer2-widget-light,html-widget-light">
+    <rect class="node-rect" x="1120" y="190" width="120" height="48" rx="8" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="node-label" x="1180" y="210" text-anchor="middle">widget_gen.py</text>
+    <text class="node-label-small" x="1180" y="228" text-anchor="middle">JSON → HTML</text>
+  </g>
+
+  <!-- HTML-виджет (артефакт) -->
+  <g class="node-group" data-id="html-widget-light" data-connected="widget-gen-light">
+    <path class="node-rect" d="M1360 194 h100 l18 18 v42 h-118 z" fill="#1A1D24" stroke="#4CAF82" stroke-width="1.5"/>
+    <path d="M1460 194 v18 h18" fill="none" stroke="#4CAF82" stroke-width="1.5"/>
+    <text class="artifact-label" x="1410" y="218" text-anchor="middle" fill="#4CAF82">HTML-виджет</text>
+    <text class="node-label-small" x="1410" y="233" text-anchor="middle">Виджет — *.html</text>
+  </g>
+
+  <!-- ЛЕГЕНДА (лёгкий режим) -->
+  <g transform="translate(20, 290)">
+    <text style="font-size:11px; fill:#8B949E; font-weight:600;">Типы узлов:</text>
+    <rect x="0" y="10" width="12" height="12" rx="2" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="legend-item" x="16" y="21">инструкция (.md)</text>
+    <rect x="120" y="10" width="12" height="12" rx="2" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="legend-item" x="136" y="21">скрипт (.py)</text>
+    <path d="M240 10 h60 l10 10 v12 h-70 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.2"/>
+    <path d="M300 10 v10 h10" fill="none" stroke="#4A5568" stroke-width="1.2"/>
+    <text class="legend-item" x="316" y="21">артефакт</text>
+    <rect x="380" y="10" width="12" height="12" rx="2" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="legend-item" x="396" y="21">субагент</text>
+    <rect x="460" y="10" width="12" height="12" rx="2" fill="#2A2008" stroke="#F5C842" stroke-width="1.5"/>
+    <text class="legend-item" x="476" y="21">бригадир</text>
+    <text style="font-size:11px; fill:#8B949E;" x="540" y="21">Лёгкий режим: Claude сам выполняет весь пайплайн без субагентов</text>
+  </g>
+
+</g>
+<!-- END graph-light -->
+
+
+<!-- ════════════════════════════════════════════════════════
+     ПОЛНЫЙ РЕЖИМ
+     ════════════════════════════════════════════════════════ -->
+<g id="graph-full" style="display:none">
+
+  <!-- ── Колонки по X: 80(транскр), 240(prepro), 420(чанки), 600(фаза1), 800(бригадир), 980(чистовая), 1160(фаза2), 1360(бригадир2), 1540(мастер), 1700(layer2), 1860(widgetgen), 2020(html) ── -->
+
+  <!-- Транскрипт → preprocessor -->
+  <line class="edge edge-main" x1="140" y1="120" x2="220" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- preprocessor → Чанки -->
+  <line class="edge edge-main" x1="370" y1="120" x2="440" y2="120" marker-end="url(#arrow-main)"/>
+  <text class="edge-label" x="386" y="113">&gt;25K · split</text>
+
+  <!-- tov_spec → Бригадир 1 (пунктир) -->
+  <path class="edge edge-artifact" d="M295 185 C295 230 790 200 790 168" marker-end="url(#arrow-artifact)"/>
+  <text class="edge-label" x="510" y="185">ToV (динамика)</text>
+
+  <!-- profiles → subagent_phase1 (пунктир) -->
+  <path class="edge edge-artifact" d="M295 235 C340 260 570 270 580 225" marker-end="url(#arrow-artifact)"/>
+  <text class="edge-label" x="380" y="268">профиль</text>
+
+  <!-- Чанки → bracket фазы 1 (fan-out, 3 линии) -->
+  <line class="edge edge-parallel" x1="540" y1="105" x2="595" y2="68" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="540" y1="120" x2="595" y2="120" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="540" y1="135" x2="595" y2="172" marker-end="url(#arrow-parallel)"/>
+
+  <!-- bracket фазы 1 → brigadir1 (fan-in) -->
+  <line class="edge edge-parallel" x1="775" y1="68" x2="810" y2="100" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="775" y1="120" x2="810" y2="120" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="775" y1="172" x2="810" y2="140" marker-end="url(#arrow-parallel)"/>
+
+  <!-- brigadir1 → Чистовая карта -->
+  <line class="edge edge-main" x1="940" y1="120" x2="1005" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- Чистовая карта → bracket фазы 2 (fan-out) -->
+  <line class="edge edge-parallel" x1="1125" y1="105" x2="1175" y2="68" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="1125" y1="120" x2="1175" y2="120" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="1125" y1="135" x2="1175" y2="172" marker-end="url(#arrow-parallel)"/>
+
+  <!-- tov → subagent_phase2 (пунктир) -->
+  <path class="edge edge-artifact" d="M295 185 C295 230 1160 200 1160 175" marker-end="url(#arrow-artifact)"/>
+
+  <!-- bracket фазы 2 → brigadir2 (fan-in) -->
+  <line class="edge edge-parallel" x1="1355" y1="68" x2="1390" y2="100" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="1355" y1="120" x2="1390" y2="120" marker-end="url(#arrow-parallel)"/>
+  <line class="edge edge-parallel" x1="1355" y1="172" x2="1390" y2="140" marker-end="url(#arrow-parallel)"/>
+
+  <!-- brigadir2 → Мастер-MD -->
+  <line class="edge edge-main" x1="1520" y1="120" x2="1575" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- Мастер-MD → layer2_widget -->
+  <line class="edge edge-main" x1="1700" y1="120" x2="1750" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- layer2_widget → widget_gen -->
+  <line class="edge edge-main" x1="1900" y1="120" x2="1950" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- widget_gen → HTML-виджет -->
+  <line class="edge edge-main" x1="2080" y1="120" x2="2140" y2="120" marker-end="url(#arrow-main)"/>
+
+  <!-- ── УЗЛЫ ── -->
+
+  <!-- Транскрипт -->
+  <g class="node-group" data-id="transcript-full" data-connected="preprocessor-full">
+    <path class="node-rect" d="M20 98 h100 l18 18 v48 h-118 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M120 98 v18 h18" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="70" y="122" text-anchor="middle">Транскрипт</text>
+    <text class="node-label-small" x="70" y="137" text-anchor="middle">.txt (таймингами)</text>
+  </g>
+
+  <!-- preprocessor.py -->
+  <g class="node-group" data-id="preprocessor-full" data-connected="transcript-full,chunks-full">
+    <rect class="node-rect" x="220" y="96" width="150" height="48" rx="8" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="node-label" x="295" y="117" text-anchor="middle">preprocessor.py</text>
+    <text class="node-label-small" x="295" y="134" text-anchor="middle">windows + split</text>
+  </g>
+
+  <!-- tov_spec.md -->
+  <g class="node-group" data-id="tov-spec-full" data-connected="phase2-bracket-full,brigadir1-full">
+    <rect class="node-rect" x="220" y="162" width="150" height="44" rx="8" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="node-label" x="295" y="182" text-anchor="middle">tov_spec.md</text>
+    <text class="node-label-small" x="295" y="197" text-anchor="middle">голос спикера</text>
+  </g>
+
+  <!-- profiles -->
+  <g class="node-group" data-id="profiles-full" data-connected="phase1-bracket-full">
+    <rect class="node-rect" x="220" y="213" width="150" height="44" rx="8" fill="#1A2030" stroke="#7B8FA6" stroke-width="1.5"/>
+    <text class="node-label" x="295" y="232" text-anchor="middle">kartograf_profile</text>
+    <text class="node-label-small" x="295" y="247" text-anchor="middle">×4 профиля</text>
+  </g>
+
+  <!-- Чанки (артефакт) -->
+  <g class="node-group" data-id="chunks-full" data-connected="preprocessor-full,phase1-bracket-full">
+    <path class="node-rect" d="M440 98 h90 l18 18 v48 h-108 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M530 98 v18 h18" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="485" y="121" text-anchor="middle">Чанки</text>
+    <text class="node-label-small" x="485" y="136" text-anchor="middle">_chunk0N.txt</text>
+  </g>
+
+  <!-- BRACKET ФАЗА 1 -->
+  <rect x="593" y="40" width="183" height="160" rx="8" fill="rgba(155,106,245,0.05)" stroke="#9B6AF5" stroke-width="1" stroke-dasharray="6,4"/>
+  <text class="bracket-label" x="685" y="32" text-anchor="middle">Фаза 1 — параллельно</text>
+
+  <!-- subagent_phase1 ×3 -->
+  <g class="node-group subagent-card" data-id="phase1-bracket-full" data-connected="chunks-full,brigadir1-full">
+    <rect x="600" y="48" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="684" y="64" text-anchor="middle">subagent_phase1</text>
+    <text class="node-label-small" x="684" y="79" text-anchor="middle">chunk01</text>
+  </g>
+  <g class="node-group subagent-card" style="animation-delay:0.6s" data-id="phase1-bracket-full" data-connected="chunks-full,brigadir1-full">
+    <rect x="600" y="100" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="684" y="117" text-anchor="middle">subagent_phase1</text>
+    <text class="node-label-small" x="684" y="132" text-anchor="middle">chunk02</text>
+  </g>
+  <g class="node-group subagent-card" style="animation-delay:1.2s" data-id="phase1-bracket-full" data-connected="chunks-full,brigadir1-full">
+    <rect x="600" y="152" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="684" y="169" text-anchor="middle">subagent_phase1</text>
+    <text class="node-label-small" x="684" y="184" text-anchor="middle">chunk03 …</text>
+  </g>
+
+  <!-- Черновые карты (артефакт, выходят из bracket) -->
+  <!-- подпись на fan-in -->
+  <text class="edge-label" x="780" y="88">черновые</text>
+  <text class="edge-label" x="780" y="99">карты</text>
+
+  <!-- brigadir.md (глобальный обзор) -->
+  <g class="node-group" data-id="brigadir1-full" data-connected="phase1-bracket-full,clean-map-full,tov-spec-full">
+    <rect class="node-rect" x="810" y="92" width="130" height="56" rx="10" fill="#2A2008" stroke="#F5C842" stroke-width="2"/>
+    <text class="node-label" style="fill:#F5C842; font-size:13px;" x="875" y="114" text-anchor="middle">brigadir.md</text>
+    <text class="node-label-small" x="875" y="130" text-anchor="middle">глобальный обзор</text>
+    <text class="node-label-small" x="875" y="143" text-anchor="middle">→ чистовая карта</text>
+  </g>
+
+  <!-- Чистовая карта (артефакт) -->
+  <g class="node-group" data-id="clean-map-full" data-connected="brigadir1-full,phase2-bracket-full">
+    <path class="node-rect" d="M1003 98 h100 l18 18 v48 h-118 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M1103 98 v18 h18" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="1063" y="120" text-anchor="middle">Чистовая</text>
+    <text class="artifact-label" x="1063" y="133" text-anchor="middle">карта</text>
+    <text class="node-label-small" x="1063" y="146" text-anchor="middle">навигация</text>
+  </g>
+
+  <!-- BRACKET ФАЗА 2 -->
+  <rect x="1173" y="40" width="183" height="160" rx="8" fill="rgba(155,106,245,0.05)" stroke="#9B6AF5" stroke-width="1" stroke-dasharray="6,4"/>
+  <text class="bracket-label" x="1265" y="32" text-anchor="middle">Фаза 2 — параллельно</text>
+
+  <!-- subagent_phase2 ×3 -->
+  <g class="node-group subagent-card" data-id="phase2-bracket-full" data-connected="clean-map-full,brigadir2-full">
+    <rect x="1180" y="48" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="1264" y="64" text-anchor="middle">subagent_phase2</text>
+    <text class="node-label-small" x="1264" y="79" text-anchor="middle">сегмент 1</text>
+  </g>
+  <g class="node-group subagent-card" style="animation-delay:0.7s" data-id="phase2-bracket-full" data-connected="clean-map-full,brigadir2-full">
+    <rect x="1180" y="100" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="1264" y="117" text-anchor="middle">subagent_phase2</text>
+    <text class="node-label-small" x="1264" y="132" text-anchor="middle">сегмент 2</text>
+  </g>
+  <g class="node-group subagent-card" style="animation-delay:1.4s" data-id="phase2-bracket-full" data-connected="clean-map-full,brigadir2-full">
+    <rect x="1180" y="152" width="168" height="38" rx="6" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="node-label" x="1264" y="169" text-anchor="middle">subagent_phase2</text>
+    <text class="node-label-small" x="1264" y="184" text-anchor="middle">сегмент N …</text>
+  </g>
+
+  <!-- подпись fan-in фазы 2 -->
+  <text class="edge-label" x="1360" y="88">тексты</text>
+  <text class="edge-label" x="1360" y="99">сегментов</text>
+
+  <!-- brigadir.md (сборка) -->
+  <g class="node-group" data-id="brigadir2-full" data-connected="phase2-bracket-full,master-md-full">
+    <rect class="node-rect" x="1390" y="92" width="130" height="56" rx="10" fill="#2A2008" stroke="#F5C842" stroke-width="2"/>
+    <text class="node-label" style="fill:#F5C842; font-size:13px;" x="1455" y="114" text-anchor="middle">brigadir.md</text>
+    <text class="node-label-small" x="1455" y="130" text-anchor="middle">верификация</text>
+    <text class="node-label-small" x="1455" y="143" text-anchor="middle">гармонизация · сборка</text>
+  </g>
+
+  <!-- Мастер-MD -->
+  <g class="node-group" data-id="master-md-full" data-connected="brigadir2-full,layer2-widget-full">
+    <path class="node-rect" d="M1573 98 h100 l18 18 v48 h-118 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.5"/>
+    <path d="M1673 98 v18 h18" fill="none" stroke="#4A5568" stroke-width="1.5"/>
+    <text class="artifact-label" x="1625" y="120" text-anchor="middle">Мастер-MD</text>
+    <text class="node-label-small" x="1625" y="136" text-anchor="middle">*_мастер.md</text>
+  </g>
+
+  <!-- layer2_widget.md -->
+  <g class="node-group" data-id="layer2-widget-full" data-connected="master-md-full,widget-gen-full">
+    <rect class="node-rect" x="1750" y="96" width="150" height="48" rx="8" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="node-label" x="1825" y="116" text-anchor="middle">layer2_widget.md</text>
+    <text class="node-label-small" x="1825" y="132" text-anchor="middle">MD → JSON</text>
+  </g>
+
+  <!-- widget_generator.py -->
+  <g class="node-group" data-id="widget-gen-full" data-connected="layer2-widget-full,html-widget-full">
+    <rect class="node-rect" x="1950" y="96" width="130" height="48" rx="8" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="node-label" x="2015" y="116" text-anchor="middle">widget_gen.py</text>
+    <text class="node-label-small" x="2015" y="132" text-anchor="middle">JSON → HTML</text>
+  </g>
+
+  <!-- HTML-виджет -->
+  <g class="node-group" data-id="html-widget-full" data-connected="widget-gen-full">
+    <path class="node-rect" d="M2140 98 h100 l18 18 v48 h-118 z" fill="#1A1D24" stroke="#4CAF82" stroke-width="1.5"/>
+    <path d="M2240 98 v18 h18" fill="none" stroke="#4CAF82" stroke-width="1.5"/>
+    <text class="artifact-label" x="2193" y="120" text-anchor="middle" fill="#4CAF82">HTML-виджет</text>
+    <text class="node-label-small" x="2193" y="136" text-anchor="middle">Виджет — *.html</text>
+  </g>
+
+  <!-- ЛЕГЕНДА полного режима -->
+  <g transform="translate(20, 290)">
+    <text style="font-size:11px; fill:#8B949E; font-weight:600;">Типы узлов:</text>
+    <rect x="0" y="10" width="12" height="12" rx="2" fill="#1A2040" stroke="#4F6EF5" stroke-width="1.5"/>
+    <text class="legend-item" x="16" y="21">инструкция (.md)</text>
+    <rect x="120" y="10" width="12" height="12" rx="2" fill="#2A1E08" stroke="#F5A623" stroke-width="1.5"/>
+    <text class="legend-item" x="136" y="21">скрипт (.py)</text>
+    <path d="M240 10 h60 l10 10 v12 h-70 z" fill="#1A1D24" stroke="#4A5568" stroke-width="1.2"/>
+    <path d="M300 10 v10 h10" fill="none" stroke="#4A5568" stroke-width="1.2"/>
+    <text class="legend-item" x="316" y="21">артефакт</text>
+    <rect x="380" y="10" width="12" height="12" rx="2" fill="#1E1430" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="legend-item" x="396" y="21">субагент</text>
+    <rect x="460" y="10" width="12" height="12" rx="2" fill="#2A2008" stroke="#F5C842" stroke-width="1.5"/>
+    <text class="legend-item" x="476" y="21">бригадир</text>
+    <line x1="540" y1="16" x2="562" y2="16" stroke="#9B6AF5" stroke-width="1.5"/>
+    <text class="legend-item" x="566" y="21">параллельный поток</text>
+    <line x1="660" y1="16" x2="682" y2="16" stroke="#E2E8F0" stroke-width="1.5"/>
+    <text class="legend-item" x="686" y="21">основной поток</text>
+    <line x1="760" y1="16" x2="782" y2="16" stroke="#4A5568" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <text class="legend-item" x="786" y="21">артефакт/контекст</text>
+  </g>
+
+</g>
+<!-- END graph-full -->
+
+</svg>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-panel" id="detail-panel">
+  <button class="detail-close" onclick="closePanel()">×</button>
+  <div class="detail-header">
+    <span class="detail-name" id="dp-name"></span>
+    <span class="detail-badge" id="dp-badge"></span>
+  </div>
+  <div class="detail-role" id="dp-role"></div>
+  <div class="detail-io">
+    <div class="detail-io-section accepts">
+      <h4>Принимает</h4>
+      <ul id="dp-accepts"></ul>
+    </div>
+    <div class="detail-io-section produces">
+      <h4>Производит</h4>
+      <ul id="dp-produces"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const NODES = {
+  transcript: {
+    label: "Транскрипт .txt",
+    type: "artifact",
+    role: "Исходный транскрипт видеолекции с таймингами в формате [HH:MM:SS]. Точка входа всего пайплайна. Типичный размер — 36–60K токенов для 3–4-часового видео.",
+    accepts: ["Видеолекция (исходник)"],
+    produces: ["Транскрипт _transcript.txt для preprocessor.py"]
+  },
+  "transcript-full": {
+    label: "Транскрипт .txt",
+    type: "artifact",
+    role: "Исходный транскрипт видеолекции с таймингами в формате [HH:MM:SS]. Точка входа всего пайплайна. Типичный размер — 36–60K токенов для 3–4-часового видео.",
+    accepts: ["Видеолекция (исходник)"],
+    produces: ["Транскрипт _transcript.txt для preprocessor.py"]
+  },
+  preprocessor: {
+    label: "preprocessor.py",
+    type: "script",
+    role: "ШАГ 0: оценивает размер транскрипта (команда info), выдаёт окна ±2.5K токенов вокруг потенциальных точек нарезки (windows), нарезает транскрипт на чанки с перекрытием 500 токенов (split). В лёгком режиме используется только команда info.",
+    accepts: ["Транскрипт .txt", "Таймкоды точек реза (для split)"],
+    produces: ["Оценка токенов и режима работы (info)", "Окна для LLM-поиска границ (windows)", "Чанки _chunk0N.txt (split)"]
+  },
+  "preprocessor-full": {
+    label: "preprocessor.py",
+    type: "script",
+    role: "ШАГ 0: оценивает размер транскрипта (команда info), выдаёт окна ±2.5K токенов вокруг потенциальных точек нарезки (windows), нарезает транскрипт на чанки с перекрытием 500 токенов (split). Перекрытие предотвращает потерю контента на границах.",
+    accepts: ["Транскрипт .txt", "Таймкоды точек реза HH:MM:SS,..."],
+    produces: ["Оценка токенов (info)", "Окна для LLM (windows)", "Чанки _chunk0N.txt (split)"]
+  },
+  "tov-spec": {
+    label: "tov_spec.md",
+    type: "instruction",
+    role: "Спецификация голоса и стиля написания. Содержит базовую часть (первое лицо, живая речь, без академизма) и динамический блок [TOV_DYNAMIC], который Claude заполняет перед написанием — характерные обороты спикера, темп, фирменные фразы (~150–200 токенов).",
+    accepts: ["Первые 2–3K токенов транскрипта (для выделения черт речи)"],
+    produces: ["[TOV_DYNAMIC] блок для subagent_phase2.md и brigadir.md", "Правила форматирования (жирный, спецблоки Лайфхак/Важно/Демонстрация)"]
+  },
+  "tov-spec-full": {
+    label: "tov_spec.md",
+    type: "instruction",
+    role: "Спецификация голоса и стиля написания. Содержит базовую часть (первое лицо, живая речь, без академизма) и динамический блок [TOV_DYNAMIC], который Claude заполняет перед Фазой 2 — характерные обороты спикера, темп, фирменные фразы (~150–200 токенов).",
+    accepts: ["Первые 2–3K токенов транскрипта (для выделения черт речи)"],
+    produces: ["[TOV_DYNAMIC] блок для субагентов Фазы 2 и бригадира", "Правила форматирования (жирный, спецблоки)"]
+  },
+  profiles: {
+    label: "kartograf_profile_*.md",
+    type: "profile",
+    role: "4 профиля контента: lecture (лекция), custdev (custdev-интервью), meeting (встреча/синк), conference (конференс-доклад). Определяют допустимые риторические роли сегментов и принципы сегментации для конкретного типа выступления.",
+    accepts: ["Выбор профиля пользователем на ШАГ 0"],
+    produces: ["Список допустимых риторических ролей для сегментации"]
+  },
+  "profiles-full": {
+    label: "kartograf_profile_*.md",
+    type: "profile",
+    role: "4 профиля контента: lecture (лекция), custdev (custdev-интервью), meeting (встреча/синк), conference (конференс-доклад). Определяют допустимые риторические роли сегментов и принципы сегментации для конкретного типа выступления.",
+    accepts: ["Выбор профиля пользователем на ШАГ 0"],
+    produces: ["Список допустимых риторических ролей для subagent_phase1.md"]
+  },
+  "claude-self": {
+    label: "SKILL.md (лёгкий режим)",
+    type: "instruction",
+    role: "В лёгком режиме (≤25K токенов) Claude выполняет весь пайплайн самостоятельно без субагентов: сегментация транскрипта → написание текста → логическая реконструкция → сборка мастер-MD. Те же критерии качества, тот же формат вывода, что и в полном режиме.",
+    accepts: ["Транскрипт (≤25K токенов)", "ToV-спецификация", "Профиль контента"],
+    produces: ["Мастер-MD (*_мастер.md)"]
+  },
+  "master-md-light": {
+    label: "*_мастер.md",
+    type: "artifact",
+    role: "Единственный артефакт Слоя 1. Содержит метаданные + раздел «Логическая реконструкция» (абзац + таблица риторики) + сегменты (Ключевая мысль, Карта, Текст) + переходы между сегментами. Является источником для Слоя 2 и серийным контекстом для будущих сессий.",
+    accepts: ["Вывод Claude (лёгкий режим) или бригадира (полный режим)"],
+    produces: ["Источник для layer2_widget.md (Слой 2)", "Серийный контекст [SERIAL CONTEXT] для следующих частей"]
+  },
+  "master-md-full": {
+    label: "*_мастер.md",
+    type: "artifact",
+    role: "Единственный артефакт Слоя 1. Содержит метаданные + раздел «Логическая реконструкция» (абзац + таблица риторики) + сегменты (Ключевая мысль, Карта, Текст) + переходы между сегментами. Является источником для Слоя 2 и серийным контекстом для будущих сессий.",
+    accepts: ["Финальная сборка от brigadir.md"],
+    produces: ["Источник для layer2_widget.md (Слой 2)", "Серийный контекст для следующих частей"]
+  },
+  "layer2-widget-light": {
+    label: "layer2_widget.md",
+    type: "instruction",
+    role: "Инструкция Слоя 2: механическая конвертация мастер-MD в JSON, затем в HTML-виджет. Содержит полную схему JSON-структуры (meta, reconstruction, segments), правила конвертации форматирования (абзац → <p>, жирный → <strong>, спецблоки → div с рамкой) и инструкцию по запуску widget_generator.py.",
+    accepts: ["Мастер-MD из transcripts/"],
+    produces: ["JSON-файл (Виджет — *.json)", "Запуск widget_generator.py"]
+  },
+  "layer2-widget-full": {
+    label: "layer2_widget.md",
+    type: "instruction",
+    role: "Инструкция Слоя 2: механическая конвертация мастер-MD в JSON, затем в HTML-виджет. Содержит полную схему JSON-структуры (meta, reconstruction, segments), правила конвертации форматирования (абзац → <p>, жирный → <strong>, спецблоки → div с рамкой) и инструкцию по запуску widget_generator.py.",
+    accepts: ["Мастер-MD из transcripts/"],
+    produces: ["JSON-файл (Виджет — *.json)", "Запуск widget_generator.py"]
+  },
+  "widget-gen-light": {
+    label: "widget_generator.py",
+    type: "script",
+    role: "Генератор HTML-виджета. Читает JSON, встраивает CSS и JS-логику, собирает одностраничный интерактивный виджет с двумя колонками (Текст слева, Карта справа), табами по сегментам и полосой прогресса. Функция validate_js проверяет JS-синтаксис через node --check.",
+    accepts: ["JSON-файл (meta + reconstruction + segments)"],
+    produces: ["HTML-виджет (Виджет — *.html)", "Результат валидации JS"]
+  },
+  "widget-gen-full": {
+    label: "widget_generator.py",
+    type: "script",
+    role: "Генератор HTML-виджета. Читает JSON, встраивает CSS и JS-логику, собирает одностраничный интерактивный виджет с двумя колонками (Текст слева, Карта справа), табами по сегментам и полосой прогресса. Функция validate_js проверяет JS-синтаксис через node --check.",
+    accepts: ["JSON-файл (meta + reconstruction + segments)"],
+    produces: ["HTML-виджет (Виджет — *.html)", "Результат валидации JS"]
+  },
+  "html-widget-light": {
+    label: "HTML-виджет",
+    type: "artifact",
+    role: "Финальный интерактивный HTML-виджет. Автономный файл без внешних зависимостей. Двухколонный: слева — полный текст сегмента с ключевой мыслью, справа — инсайт-карточки из Карты (цвет по риторической роли: concept/method/demo). Навигация: табы, кнопки, полоса прогресса, TOC.",
+    accepts: ["Генерируется widget_generator.py из JSON"],
+    produces: ["Учебный материал для студентов"]
+  },
+  "html-widget-full": {
+    label: "HTML-виджет",
+    type: "artifact",
+    role: "Финальный интерактивный HTML-виджет. Автономный файл без внешних зависимостей. Двухколонный: слева — полный текст сегмента с ключевой мыслью, справа — инсайт-карточки из Карты (цвет по риторической роли: concept/method/demo). Навигация: табы, кнопки, полоса прогресса, TOC.",
+    accepts: ["Генерируется widget_generator.py из JSON"],
+    produces: ["Учебный материал для студентов"]
+  },
+  "chunks-full": {
+    label: "Чанки _chunk0N.txt",
+    type: "artifact",
+    role: "Фрагменты транскрипта по ~15–18K токенов с перекрытием ~500 токенов на стыке. Нарезаются по смысловым границам (конец мысли/абзаца). Каждый чанк обрабатывается одним субагентом Фазы 1 независимо и параллельно.",
+    accepts: ["Транскрипт (>25K токенов)", "Таймкоды точек реза от preprocessor.py"],
+    produces: ["Входные данные для субагентов Фазы 1"]
+  },
+  "phase1-bracket-full": {
+    label: "subagent_phase1.md",
+    type: "subagent",
+    role: "ФАЗА 1: каждый субагент получает один чанк транскрипта и производит черновую сегментацию — список сегментов с таймингами, риторическими ролями (введение/лекция-теория/лекция-практика/Q&A/итоги/орг) и ключевыми тезисами (3–5 буллетов). Субагенты работают параллельно, текст не пишут.",
+    accepts: ["[CHUNK] — чанк транскрипта", "[SERIAL CONTEXT] — мастер-MD предыдущих частей (опционально)", "[PROFILE] — профиль контента"],
+    produces: ["Черновая карта чанка: сегменты + роли + тезисы"]
+  },
+  "brigadir1-full": {
+    label: "brigadir.md (глобальный обзор)",
+    type: "brigadir",
+    role: "После Фазы 1: получает черновые карты всех чанков, проверяет по трём критериям (единство риторической функции, сигналы смены режима автора, логическая связность) и производит чистовую навигационную карту всего выступления. При неопределённости — точечно читает фрагмент транскрипта.",
+    accepts: ["Черновые карты от всех субагентов Фазы 1", "Доступ к транскрипту (для точечной проверки)"],
+    produces: ["Чистовая карта (навигационная) — фиксирует структуру ДО написания текста"]
+  },
+  "clean-map-full": {
+    label: "Чистовая карта",
+    type: "artifact",
+    role: "Финальная навигационная карта всего выступления: список сегментов с таймингами, риторическими ролями и тезисами. Ключевой артефакт между Фазой 1 и Фазой 2 — фиксирует структуру до того, как субагенты вложат время в написание текста. В режиме «с проверкой» показывается пользователю.",
+    accepts: ["Интеграция черновых карт бригадиром"],
+    produces: ["[NAV MAP] для каждого субагента Фазы 2"]
+  },
+  "phase2-bracket-full": {
+    label: "subagent_phase2.md",
+    type: "subagent",
+    role: "ФАЗА 2: каждый субагент пишет конспект для одного сегмента. Получает чистовую карту (контекст), ToV-спецификацию (голос), запись своего сегмента и кусок транскрипта. Производит три блока: Ключевая мысль (1–2 предложения) + Карта (4–8 буллетов) + Текст (абзацы, первое лицо). Субагенты работают параллельно.",
+    accepts: ["[NAV MAP] — чистовая карта", "[TOV SPEC] — голос и стиль", "[SEGMENT SPEC] — запись сегмента", "[CHUNK] — фрагмент транскрипта"],
+    produces: ["Ключевая мысль + Карта + Текст для одного сегмента"]
+  },
+  "brigadir2-full": {
+    label: "brigadir.md (сборка)",
+    type: "brigadir",
+    role: "После Фазы 2: верифицирует (все ли тезисы карты отражены в тексте), гармонизирует стиль (единый голос, темп, переходы между сегментами), пишет раздел «Логическая реконструкция» (абзац прозой + таблица риторики), собирает финальный мастер-MD.",
+    accepts: ["Тексты сегментов от субагентов Фазы 2", "Чистовая карта", "ToV-спецификация"],
+    produces: ["Мастер-MD (*_мастер.md) в transcripts/"]
+  }
+};
+
+const BADGE_CLASSES = {
+  artifact: "badge-artifact",
+  instruction: "badge-instruction",
+  script: "badge-script",
+  subagent: "badge-subagent",
+  brigadir: "badge-brigadir",
+  profile: "badge-profile"
+};
+
+const TYPE_LABELS = {
+  artifact: "артефакт",
+  instruction: "инструкция",
+  script: "скрипт",
+  subagent: "субагент",
+  brigadir: "бригадир",
+  profile: "профиль"
+};
+
+let currentMode = 'light';
+let selectedNode = null;
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('graph-light').style.display = mode === 'light' ? 'block' : 'none';
+  document.getElementById('graph-full').style.display = mode === 'full' ? 'block' : 'none';
+  document.getElementById('btn-light').classList.toggle('active', mode === 'light');
+  document.getElementById('btn-full').classList.toggle('active', mode === 'full');
+
+  const svg = document.getElementById('arch-svg');
+  if (mode === 'light') {
+    svg.setAttribute('viewBox', '0 0 1500 360');
+    svg.style.minWidth = '900px';
+  } else {
+    svg.setAttribute('viewBox', '0 0 2280 340');
+    svg.style.minWidth = '1400px';
+  }
+  closePanel();
+}
+
+function closePanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  if (selectedNode) {
+    selectedNode.classList.remove('selected');
+    selectedNode = null;
+  }
+  document.querySelectorAll('.node-group.dimmed').forEach(n => n.classList.remove('dimmed'));
+}
+
+function showPanel(nodeId) {
+  const data = NODES[nodeId];
+  if (!data) return;
+
+  document.getElementById('dp-name').textContent = data.label;
+  const badge = document.getElementById('dp-badge');
+  badge.textContent = TYPE_LABELS[data.type] || data.type;
+  badge.className = 'detail-badge ' + (BADGE_CLASSES[data.type] || '');
+  document.getElementById('dp-role').textContent = data.role;
+
+  const acceptsList = document.getElementById('dp-accepts');
+  acceptsList.innerHTML = data.accepts.map(a => `<li>${a}</li>`).join('');
+  const producesList = document.getElementById('dp-produces');
+  producesList.innerHTML = data.produces.map(p => `<li>${p}</li>`).join('');
+
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+document.getElementById('arch-svg').addEventListener('click', function(e) {
+  const nodeGroup = e.target.closest('.node-group[data-id]');
+
+  if (!nodeGroup) {
+    closePanel();
+    return;
+  }
+
+  const nodeId = nodeGroup.dataset.id;
+
+  // Снять предыдущий выбор
+  if (selectedNode) {
+    selectedNode.classList.remove('selected');
+  }
+  document.querySelectorAll('.node-group.dimmed').forEach(n => n.classList.remove('dimmed'));
+
+  if (selectedNode === nodeGroup) {
+    selectedNode = null;
+    closePanel();
+    return;
+  }
+
+  selectedNode = nodeGroup;
+  nodeGroup.classList.add('selected');
+
+  // Highlight connected + dim others
+  const connected = (nodeGroup.dataset.connected || '').split(',').map(s => s.trim()).filter(Boolean);
+  const currentGraph = document.getElementById(currentMode === 'light' ? 'graph-light' : 'graph-full');
+
+  currentGraph.querySelectorAll('.node-group[data-id]').forEach(n => {
+    if (n === nodeGroup) return;
+    const nId = n.dataset.id;
+    if (!connected.includes(nId)) {
+      n.classList.add('dimmed');
+    }
+  });
+
+  showPanel(nodeId);
+});
+
+// Init
+setMode('light');
+</script>
+</body>
+</html>
