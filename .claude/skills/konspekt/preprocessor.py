@@ -11,11 +11,11 @@ import os
 import re
 import argparse
 
-TOKENS_PER_CHAR = 0.25   # ~4 символа на токен для русского текста
-CHUNK_SIZE = 16_000       # Целевой размер куска (токенов)
-WINDOW_SIZE = 2_500       # Окно для LLM-анализа границы (токенов с каждой стороны)
-OVERLAP = 500             # Перекрытие между кусками (токенов)
-LARGE_THRESHOLD = 25_000  # Порог «большого» транскрипта
+TOKENS_PER_CHAR = 0.25      # ~4 символа на токен для русского текста
+CHUNK_DURATION_SEC = 3600   # 60 минут — целевой размер чанка (тайминг-режим)
+CHUNK_SIZE_TOKENS = 12_000  # ~60 мин в токенах — фоллбэк без тайминга
+WINDOW_SIZE = 2_500         # Окно для LLM-анализа границы (токенов с каждой стороны)
+OVERLAP = 500               # Перекрытие между кусками (токенов)
 
 
 def estimate_tokens(text: str) -> int:
@@ -44,6 +44,18 @@ def parse_transcript_lines(text: str) -> list:
     return result
 
 
+def has_timestamps(lines: list) -> bool:
+    """True если транскрипт содержит валидные временные метки."""
+    return len(lines) >= 2 and lines[-1]['seconds'] > lines[0]['seconds']
+
+
+def format_duration(seconds: int) -> str:
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
 def info(path: str) -> None:
     with open(path, encoding='utf-8') as f:
         text = f.read()
@@ -54,15 +66,28 @@ def info(path: str) -> None:
     print(f"Символов:         {len(text):,}")
     print(f"Токенов (оценка): {tokens:,}")
     print(f"Строк с тайм.:    {len(lines)}")
+
     if lines:
         print(f"Диапазон:         {lines[0]['time']} – {lines[-1]['time']}")
 
-    if tokens > LARGE_THRESHOLD:
-        n = (tokens // CHUNK_SIZE) + 1
-        print(f"\n⚠  Транскрипт большой. Рекомендуется разбить на ~{n} части.")
-        print(f"   Запустите: python preprocessor.py windows \"{path}\"")
+    if has_timestamps(lines):
+        duration_sec = lines[-1]['seconds'] - lines[0]['seconds']
+        print(f"Длительность:     {format_duration(duration_sec)}")
+
+        if duration_sec > CHUNK_DURATION_SEC:
+            n = (duration_sec // CHUNK_DURATION_SEC) + 1
+            print(f"\n⚠  Транскрипт большой ({format_duration(duration_sec)}). Рекомендуется разбить на ~{n} части.")
+            print(f"   Запустите: python preprocessor.py windows \"{path}\"")
+        else:
+            print(f"\n✓  Помещается в один чанк (≤ 60 минут).")
     else:
-        print(f"\n✓  Помещается в один проход (≤ {LARGE_THRESHOLD:,} токенов).")
+        print(f"\n⚠  Тайминг в транскрипте не обнаружен — используется режим токенов.")
+        if tokens > CHUNK_SIZE_TOKENS:
+            n = (tokens // CHUNK_SIZE_TOKENS) + 1
+            print(f"   Рекомендуется разбить на ~{n} части (~{CHUNK_SIZE_TOKENS:,} токенов каждая).")
+            print(f"   Запустите: python preprocessor.py windows \"{path}\"")
+        else:
+            print(f"   Помещается в один чанк (≤ {CHUNK_SIZE_TOKENS:,} токенов).")
 
 
 def windows(path: str) -> None:
@@ -70,14 +95,34 @@ def windows(path: str) -> None:
         text = f.read()
     lines = parse_transcript_lines(text)
 
-    boundary_indices = []
-    acc = 0
-    prev_acc = 0
-    for i, ln in enumerate(lines):
-        acc += estimate_tokens(ln['text'])
-        if acc - prev_acc >= CHUNK_SIZE:
-            boundary_indices.append(i)
-            prev_acc = acc
+    if has_timestamps(lines):
+        start_sec = lines[0]['seconds']
+        total_duration = lines[-1]['seconds'] - start_sec
+
+        if total_duration <= CHUNK_DURATION_SEC:
+            print("Нарезка не требуется — транскрипт ≤ 60 минут.")
+            return
+
+        n_boundaries = total_duration // CHUNK_DURATION_SEC
+        boundary_indices = []
+        for k in range(1, n_boundaries + 1):
+            target_sec = start_sec + k * CHUNK_DURATION_SEC
+            closest = min(range(len(lines)), key=lambda i: abs(lines[i]['seconds'] - target_sec))
+            boundary_indices.append(closest)
+
+        mode_label = "тайминг-режим"
+    else:
+        # Фоллбэк: накапливать токены до CHUNK_SIZE_TOKENS
+        boundary_indices = []
+        acc = 0
+        prev_acc = 0
+        for i, ln in enumerate(lines):
+            acc += estimate_tokens(ln['text'])
+            if acc - prev_acc >= CHUNK_SIZE_TOKENS:
+                boundary_indices.append(i)
+                prev_acc = acc
+
+        mode_label = "токен-режим"
 
     if not boundary_indices:
         print("Нарезка не требуется.")
@@ -98,8 +143,10 @@ def windows(path: str) -> None:
 
         window = '\n'.join(f"[{ln['time']}] {ln['text']}" for ln in lines[start:end + 1])
 
+        center_label = lines[center]['time'] if has_timestamps(lines) else f"строка {center}"
+
         print(f"\n{'=' * 60}")
-        print(f"ТОЧКА {b_num + 1} | около {lines[center]['time']}")
+        print(f"ТОЧКА {b_num + 1} | около {center_label}  [{mode_label}]")
         print('=' * 60)
         print(window)
         print(f"\n--- ЗАДАЧА ДЛЯ LLM ---")
