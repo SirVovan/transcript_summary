@@ -3,9 +3,10 @@
 preprocessor.py — Предобработка транскрипта для скилла /konspekt.
 
 Команды:
-  python preprocessor.py info <файл>                       # Статистика файла
-  python preprocessor.py windows <файл>                    # Окна для LLM-анализа границ
-  python preprocessor.py split <файл> --at HH:MM:SS,...   # Нарезка по таймингам
+  python preprocessor.py info <файл>                                       # Статистика файла
+  python preprocessor.py windows <файл>                                    # Окна для LLM-анализа границ
+  python preprocessor.py split <файл> --at HH:MM:SS,...                    # Нарезка по таймингам (Фаза 1)
+  python preprocessor.py slice <чанк> --from HH:MM:SS --to HH:MM:SS        # Отрезок чанка по границам сегмента (Фаза 2)
 """
 import os
 import re
@@ -193,6 +194,18 @@ def split(path: str, boundary_times: list) -> list:
     return out_paths
 
 
+def slice_chunk(path: str, from_time: str, to_time: str) -> None:
+    """Печатает в stdout строки чанка в диапазоне [from_time, to_time]."""
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    lines = parse_transcript_lines(text)
+    from_sec = time_to_seconds(from_time)
+    to_sec = time_to_seconds(to_time)
+    for ln in lines:
+        if from_sec <= ln['seconds'] <= to_sec:
+            print(f"[{ln['time']}] {ln['text']}")
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='Предобработка транскрипта')
     sub = ap.add_subparsers(dest='cmd')
@@ -207,6 +220,11 @@ if __name__ == '__main__':
     p_split.add_argument('transcript')
     p_split.add_argument('--at', required=True, help='Тайминги через запятую: HH:MM:SS,HH:MM:SS')
 
+    p_slice = sub.add_parser('slice')
+    p_slice.add_argument('chunk')
+    p_slice.add_argument('--from', dest='from_time', required=True, help='Начало сегмента: HH:MM:SS')
+    p_slice.add_argument('--to', dest='to_time', required=True, help='Конец сегмента: HH:MM:SS')
+
     args = ap.parse_args()
     if args.cmd == 'info':
         info(args.transcript)
@@ -214,5 +232,7 @@ if __name__ == '__main__':
         windows(args.transcript)
     elif args.cmd == 'split':
         split(args.transcript, [t.strip() for t in args.at.split(',')])
+    elif args.cmd == 'slice':
+        slice_chunk(args.chunk, args.from_time, args.to_time)
     else:
         ap.print_help()
