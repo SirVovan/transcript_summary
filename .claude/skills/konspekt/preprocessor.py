@@ -222,7 +222,7 @@ def head(path: str, target_tokens: int = 2500) -> None:
     out_lines = []
     for ln in lines:
         t = estimate_tokens(ln['text'])
-        if acc_tokens + t > target_tokens:
+        if acc_tokens + t > target_tokens and out_lines:
             break
         out_lines.append(ln['text'])
         acc_tokens += t
