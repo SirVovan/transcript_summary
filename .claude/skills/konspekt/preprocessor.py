@@ -7,6 +7,7 @@ preprocessor.py — Предобработка транскрипта для с�
   python preprocessor.py windows <файл>                                    # Окна для LLM-анализа границ
   python preprocessor.py split <файл> --at HH:MM:SS,...                    # Нарезка по таймингам (Фаза 1)
   python preprocessor.py slice <чанк> --from HH:MM:SS --to HH:MM:SS        # Отрезок чанка по границам сегмента (Фаза 2)
+  python preprocessor.py head <файл> [--tokens N]                          # Первые N токенов без таймштампов (ToV)
 """
 import os
 import re
@@ -206,6 +207,28 @@ def slice_chunk(path: str, from_time: str, to_time: str) -> None:
             print(f"[{ln['time']}] {ln['text']}")
 
 
+def head(path: str, target_tokens: int = 2500) -> None:
+    """Печатает в stdout первые ~target_tokens токенов транскрипта без таймштамповой разметки.
+    Используется бригадиром для извлечения ToV без загрузки полного чанка."""
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    lines = parse_transcript_lines(text)
+    if not lines:
+        # Фоллбэк: вернуть первые target_tokens*4 символов
+        char_limit = target_tokens * 4
+        print(text[:char_limit])
+        return
+    acc_tokens = 0
+    out_lines = []
+    for ln in lines:
+        t = estimate_tokens(ln['text'])
+        if acc_tokens + t > target_tokens:
+            break
+        out_lines.append(ln['text'])
+        acc_tokens += t
+    print('\n'.join(out_lines))
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='Предобработка транскрипта')
     sub = ap.add_subparsers(dest='cmd')
@@ -225,6 +248,10 @@ if __name__ == '__main__':
     p_slice.add_argument('--from', dest='from_time', required=True, help='Начало сегмента: HH:MM:SS')
     p_slice.add_argument('--to', dest='to_time', required=True, help='Конец сегмента: HH:MM:SS')
 
+    p_head = sub.add_parser('head')
+    p_head.add_argument('transcript')
+    p_head.add_argument('--tokens', type=int, default=2500, help='Целевой объём в токенах (по умолчанию 2500)')
+
     args = ap.parse_args()
     if args.cmd == 'info':
         info(args.transcript)
@@ -234,5 +261,7 @@ if __name__ == '__main__':
         split(args.transcript, [t.strip() for t in args.at.split(',')])
     elif args.cmd == 'slice':
         slice_chunk(args.chunk, args.from_time, args.to_time)
+    elif args.cmd == 'head':
+        head(args.transcript, args.tokens)
     else:
         ap.print_help()
