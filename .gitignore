@@ -2,14 +2,9 @@
 __pycache__/
 *.pyc
 
-# Транскрипты и выходные файлы — не коммитить (могут быть большими)
-transcripts/*.txt
-transcripts/*.docx
-transcripts/*.xlsx
-transcripts/*.pdf
-
-# HTML-карты и виджеты — по желанию можно включить, пока исключаем
-# transcripts/*.html
+# Транскрипты и выходные файлы скилла — не коммитить (результат работы, не код)
+transcripts/**
+!transcripts/.gitkeep
 
 # OS
 .DS_Store
