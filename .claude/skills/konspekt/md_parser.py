@@ -80,7 +80,46 @@ def _split_sections(text):
 
 
 def _parse_meta(header, path):
-    raise NotImplementedError
+    """Из шапки `# Название` + `**Спикер:** ...` собирает badge/title/out."""
+    lines = header.split('\n')
+    title_line = lines[0]
+    if not title_line.startswith('# '):
+        raise MasterMDParseError(f"Ожидалась строка `# Название`, нашёл: {title_line!r}")
+    full_title = title_line[2:].strip()
+
+    speaker = None
+    for line in lines[1:]:
+        m = re.match(r'\*\*Спикер:\*\*\s*(.+)', line.strip())
+        if m:
+            speaker = m.group(1).strip()
+            break
+
+    # badge и title из full_title:
+    # «Вайбкодинг. Модуль 1. Урок 2: пошаговый алгоритм + личный проект»
+    #  ---- badge parts ------  -- title prefix --  -- title tail -----
+    if ':' in full_title:
+        before_colon, after_colon = full_title.split(':', 1)
+        parts = [p.strip() for p in before_colon.split('.') if p.strip()]
+        # badge = первые две части через ` · `; если частей < 2, берём что есть
+        if len(parts) >= 2:
+            badge = ' · '.join(parts[:2])
+            title_prefix = parts[-1]  # последняя часть - «Урок 2»
+            title = f"{title_prefix}:{after_colon}".strip()
+        else:
+            badge = parts[0] if parts else full_title
+            title = after_colon.strip()
+    else:
+        badge = full_title
+        title = full_title
+
+    if speaker:
+        title = f"{title} · {speaker}"
+
+    stem = Path(path).stem
+    out_stem = re.sub(r'_мастер$', '', stem)
+    out = f"Виджет — {out_stem}.html"
+
+    return {'badge': badge, 'title': title, 'out': out}
 
 
 def _parse_reconstruction(block):
