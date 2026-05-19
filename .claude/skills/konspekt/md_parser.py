@@ -181,6 +181,59 @@ def _label_color(label):
     return LABEL_COLORS['demo']
 
 
+def _render_blockquote(lines):
+    """
+    Список «голых» строк блока (без `> ` префикса) -> coloured <div>.
+    Первая строка: `**Метка:** [опц. inline-текст]`
+    Дальше: либо продолжение прозы, либо нумерованный/маркированный список.
+    """
+    if not lines:
+        raise MasterMDParseError("Пустой blockquote-блок")
+
+    first = lines[0]
+    m = re.match(r'\*\*([^*]+?):\*\*\s*(.*)', first)
+    if not m:
+        raise MasterMDParseError(f"Ожидался `**Метка:** ...` в blockquote, нашёл: {first!r}")
+    label, inline_after_label = m.group(1).strip(), m.group(2).strip()
+
+    bg, border = _label_color(label)
+    style = (
+        f"background:{bg};border-left:3px solid {border};"
+        f"border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;"
+        f"font-size:12.5px;line-height:1.55"
+    )
+
+    rest = lines[1:]
+    # Определяем тип хвоста: нумерованный список, маркированный, или просто проза.
+    # ВАЖНО: между </strong> и <ol>/<ul> всегда ставим пробел (как в эталонном JSON).
+    if rest and re.match(r'\d+\.\s+', rest[0]):
+        items = []
+        for line in rest:
+            m_li = re.match(r'\d+\.\s+(.*)', line)
+            if not m_li:
+                raise MasterMDParseError(f"В нумерованном списке blockquote сломанный элемент: {line!r}")
+            items.append(f'<li>{_apply_inline(m_li.group(1))}</li>')
+        body = f'<ol style="margin:6px 0 0 18px">{"".join(items)}</ol>'
+        prefix = f'{_apply_inline(inline_after_label)}' if inline_after_label else ''
+        return f'<div style="{style}"><strong>{label}:</strong> {prefix}{body}</div>'
+    elif rest and re.match(r'-\s+', rest[0]):
+        items = []
+        for line in rest:
+            m_li = re.match(r'-\s+(.*)', line)
+            if not m_li:
+                raise MasterMDParseError(f"В маркированном списке blockquote сломанный элемент: {line!r}")
+            items.append(f'<li>{_apply_inline(m_li.group(1))}</li>')
+        body = f'<ul style="margin:6px 0 0 18px">{"".join(items)}</ul>'
+        prefix = f'{_apply_inline(inline_after_label)}' if inline_after_label else ''
+        return f'<div style="{style}"><strong>{label}:</strong> {prefix}{body}</div>'
+    else:
+        # Простая проза - склеиваем строки через пробел
+        full = inline_after_label
+        if rest:
+            full = (full + ' ' + ' '.join(rest)).strip() if full else ' '.join(rest)
+        return f'<div style="{style}"><strong>{label}:</strong> {_apply_inline(full)}</div>'
+
+
 if __name__ == '__main__':
     import sys
     import json
