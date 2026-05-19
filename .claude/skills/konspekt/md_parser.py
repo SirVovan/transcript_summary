@@ -26,6 +26,29 @@ class MasterMDParseError(Exception):
     pass
 
 
+LABEL_COLORS = {
+    'idea': ('#ECF2FB', '#2562B0'),    # (И) синий
+    'method': ('#EBF5EB', '#2E6E2E'),  # (М) зелёный
+    'demo': ('#FAF0E4', '#96580F'),    # (Д) оранжевый
+}
+
+# Точные метки (нормализованные, lowercase, без точек)
+LABEL_TABLE = {
+    'ключевая идея': 'idea',
+    'главная идея': 'idea',
+    'принцип': 'idea',
+    'лайфхак': 'idea',
+    'методология': 'method',
+    'критерии': 'method',
+    'правило': 'method',
+    'шаблон': 'method',
+    'пример': 'demo',
+    'пример декомпозиции': 'demo',
+    'демонстрация': 'demo',
+    'важно': 'demo',
+}
+
+
 def parse_master_md(path):
     """Главная функция: читает файл, возвращает dict для build_html."""
     text = Path(path).read_text(encoding='utf-8')
@@ -137,6 +160,25 @@ def _apply_inline(text):
     # Потом курсив (одиночные звёздочки, не часть **)
     text = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', text)
     return text
+
+
+def _label_color(label):
+    """Метка -> (bg, border) hex-цвета."""
+    norm = label.strip().lower().rstrip(':').strip()
+    # Точное совпадение
+    if norm in LABEL_TABLE:
+        return LABEL_COLORS[LABEL_TABLE[norm]]
+    # Префиксные совпадения: «Шаг N. Финальная формулировка», «Критерии хорошей идеи»
+    for key, level in LABEL_TABLE.items():
+        if norm.startswith(key) or key in norm:
+            return LABEL_COLORS[level]
+    # Эвристика по словам
+    if any(w in norm for w in ['идея', 'принцип', 'лайфхак']):
+        return LABEL_COLORS['idea']
+    if any(w in norm for w in ['правил', 'критер', 'метод', 'шаблон', 'шаг']):
+        return LABEL_COLORS['method']
+    # Дефолт - оранжевый (примеры/предупреждения)
+    return LABEL_COLORS['demo']
 
 
 if __name__ == '__main__':
