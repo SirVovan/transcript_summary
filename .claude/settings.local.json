@@ -24,7 +24,23 @@
       "Bash(Select-Object FullName)",
       "PowerShell(pip install pytest -q)",
       "PowerShell(python -m pip install pytest -q)",
-      "Bash(python -m pytest tests/test_preprocessor.py -v)"
+      "Bash(python -m pytest tests/test_preprocessor.py -v)",
+      "Bash(code --list-extensions)",
+      "Bash(code *)",
+      "Bash(claude --version)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Process *)",
+      "Bash(tasklist)",
+      "Bash(tasklist /v)",
+      "Bash(findstr /i \"code claude\")",
+      "Bash(python -m pytest tests/test_widget_generator.py -v)",
+      "Bash(start \"D:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\konspekt-project\\\\docs\\\\architecture.html\")",
+      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — ПОЛНЫЙ курс Claude Code 2026 ч1.json\")",
+      "Bash(python .claude/skills/konspekt/preprocessor.py info \"transcripts\\\\ПОЛНЫЙ курс Claude Code 2026 ч1.txt\")",
+      "Bash(python .claude/skills/konspekt/preprocessor.py windows \"transcripts/ПОЛНЫЙ курс Claude Code 2026 ч1.txt\" --near 01:05:00)",
+      "Bash(gh pr *)",
+      "Bash(PYTHONUTF8=1 python -c \"import json; d=json.load\\(open\\(r'D:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project/transcripts/Виджет — Урок 2.json', encoding='utf-8'\\)\\); print\\('meta:', d.get\\('meta'\\)\\); print\\('reconstruction keys:', list\\(d.get\\('reconstruction', {}\\).keys\\(\\)\\)\\); print\\('trajectory:', type\\(d.get\\('trajectory'\\)\\).__name__\\); print\\('segments count:', len\\(d.get\\('segments', []\\)\\)\\); print\\('segments ids:', [s.get\\('id'\\) for s in d.get\\('segments', []\\)]\\); print\\('prompts:', d.get\\('prompts'\\)\\)\")",
+      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Урок 2.json\")"
     ]
   }
 }
