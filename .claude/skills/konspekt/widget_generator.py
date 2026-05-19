@@ -160,13 +160,30 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 .toc-item:not(.active):hover .toc-num{color:rgba(255,255,255,.65)}
 .toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}
 
+.body.body-tl{grid-template-columns:1fr}
+.lcol.lcol-full{border-right:none;overflow-y:auto}
 .tl-prose{margin-bottom:16px;color:var(--tx2);font-size:13.5px;line-height:1.7}
-.tl-track{display:flex;gap:4px;width:100%;margin-top:8px}
-.tl-block{display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px;border-radius:10px;cursor:pointer;min-width:48px;transition:opacity .15s,transform .15s;overflow:hidden}
+.tl-track{display:flex;gap:4px;width:100%;margin-top:8px;overflow-x:auto;padding-bottom:6px}
+.tl-track::-webkit-scrollbar{height:3px}
+.tl-track::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.tl-block{display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px;border-radius:10px;cursor:pointer;min-width:100px;flex-shrink:0;transition:opacity .15s,transform .15s;overflow:hidden}
 .tl-block:hover{opacity:.85;transform:translateY(-2px)}
 .tl-move{font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-time{font-size:10px;color:rgba(255,255,255,.7);font-family:var(--fm);margin-top:3px;white-space:nowrap}
-.tl-desc{font-size:11px;color:rgba(255,255,255,.85);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}"""
+.tl-desc{font-size:11px;color:rgba(255,255,255,.85);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tl-list{position:relative;padding:8px 0}
+.tl-list::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--border);z-index:0}
+.tl-item{display:flex;align-items:flex-start;padding-bottom:28px;position:relative;cursor:pointer}
+.tl-item:nth-child(odd){justify-content:flex-end;padding-right:calc(50% + 24px)}
+.tl-item:nth-child(even){padding-left:calc(50% + 24px)}
+.tl-item:last-child{padding-bottom:0}
+.tl-node{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:var(--c);border:3px solid var(--surface);box-shadow:0 0 0 2px var(--c);z-index:1;flex-shrink:0}
+.tl-card{padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:box-shadow .15s}
+.tl-item:hover .tl-card{box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.tl-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.tl-badge{font-size:12px;font-weight:700;color:var(--c);letter-spacing:.02em}
+.tl-vtime{font-size:11px;color:var(--tx3);font-family:var(--fm)}
+.tl-vdesc{font-size:13px;color:var(--tx2);line-height:1.6}"""
 
 # ──────────────────────────────────────────────────────────────────────
 # JS ENGINE (неизменная часть — движок виджета)
@@ -204,6 +221,7 @@ function setTypeVars(t){
 function render(){
   var s=SEG[cur];
   var t=T[s.type];
+  var isTL=s.type==='timeline';
   var total=SEG.length<10?'0'+SEG.length:''+SEG.length;
   var pct=Math.round((cur+1)/SEG.length*100)+'%';
   document.getElementById('stripe').style.background=t.stripe;
@@ -213,20 +231,23 @@ function render(){
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('on',i===cur);});
   document.getElementById('pb').disabled=cur===0;
   document.getElementById('nb').textContent=cur===SEG.length-1?'В начало \u2192':'Далее \u2192';
-  document.getElementById('finfo').textContent='Сегмент '+s.id+' из '+total+' \u00b7 '+s.timing;
-  document.getElementById('body').innerHTML=
-    '<div class="lcol">'
+  document.getElementById('finfo').textContent='Сегмент '+s.id+' из '+total+(s.timing?' \u00b7 '+s.timing:'');
+  var bdy=document.getElementById('body');
+  bdy.className=isTL?'body body-tl':'body';
+  bdy.innerHTML=
+    '<div class="lcol'+(isTL?' lcol-full':'')+'">'
       +'<span class="seg-pill" style="color:'+t.c+';background:'+t.bg+';border:1px solid '+t.mid+';box-shadow:0 1px 4px '+t.mid+'60">'
         +'<span class="seg-dot" style="background:'+t.c+'"></span>'
         +t.lbl
       +'</span>'
       +'<div class="seg-title">'+s.title+'</div>'
-      +'<div class="seg-timing">'+s.timing+'</div>'
+      +(isTL?'':'<div class="seg-timing">'+s.timing+'</div>')
       +'<div class="seg-body">'+BODY[s.id]+'</div>'
     +'</div>'
-    +'<div class="rcol" style="background:'+t.pale+'">'
+    +(isTL?'':
+      '<div class="rcol" style="background:'+t.pale+'">'
       +'<div class="rcol-inner">'+RIGHT[s.id]+'</div>'
-    +'</div>';
+      +'</div>');
 }
 
 function go(d){
@@ -343,7 +364,7 @@ def _move_duration(timing):
     return max(0, _time_str_to_seconds(end_s) - _time_str_to_seconds(start_s))
 
 
-def build_timeline_html(trajectory):
+def _build_timeline_vertical(trajectory):
     if not trajectory:
         return ''
     prose = trajectory.get('prose', '')
@@ -351,15 +372,11 @@ def build_timeline_html(trajectory):
     if not moves:
         return prose
 
-    durations = [_move_duration(m.get('timing', '')) for m in moves]
-    total = sum(durations) or len(moves)
-
     parts = []
     if prose:
         parts.append(f'<div class="tl-prose">{prose}</div>')
 
-    parts.append('<div class="tl-track">')
-    n = len(moves)
+    parts.append('<div class="tl-list">')
     for i, move in enumerate(moves):
         raw_id = move.get('segment', str(i + 1))
         seg_id = raw_id.zfill(2) if raw_id.isdigit() else raw_id
@@ -367,17 +384,24 @@ def build_timeline_html(trajectory):
         timing = move.get('timing', '')
         description = move.get('description', '')
         color = MOVE_COLORS.get(move_type, _DEFAULT_MOVE_COLOR)
-        dur = durations[i]
-        pct = max(5, round(dur / total * 100)) if total > 0 else round(100 / n)
         parts.append(
-            f'<div class="tl-block" style="width:{pct}%;background:{color}" onclick="goTo(\'{seg_id}\')">'
-            f'<div class="tl-move">{move_type}</div>'
-            f'<div class="tl-time">{timing}</div>'
-            f'<div class="tl-desc">{description}</div>'
+            f'<div class="tl-item" style="--c:{color}" onclick="goTo(\'{seg_id}\')">'
+            f'<div class="tl-node"></div>'
+            f'<div class="tl-card">'
+            f'<div class="tl-row">'
+            f'<span class="tl-badge">{move_type}</span>'
+            f'<span class="tl-vtime">{timing}</span>'
+            f'</div>'
+            f'<div class="tl-vdesc">{description}</div>'
+            f'</div>'
             f'</div>'
         )
     parts.append('</div>')
     return '\n'.join(parts)
+
+
+def build_timeline_html(trajectory):
+    return _build_timeline_vertical(trajectory)
 
 
 def build_reconstruction_html(recon):
@@ -532,19 +556,14 @@ def main():
     with open(json_path, encoding='utf-8') as f:
         data = json.load(f)
 
-    html = build_html(data)
-
-    # Путь к выходному файлу
     out_name = data['meta'].get('out', 'widget_output.html')
     out_dir  = os.path.dirname(os.path.abspath(json_path))
-    out_path = os.path.join(out_dir, out_name)
 
+    html     = build_html(data)
+    out_path = os.path.join(out_dir, out_name)
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
-
     print(f'Виджет создан: {out_path}')
-
-    # Валидация JS
     ok, err = validate_js(out_path)
     if ok:
         print('✅ JS syntax OK')
