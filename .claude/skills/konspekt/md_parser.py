@@ -48,6 +48,12 @@ LABEL_TABLE = {
     'важно': 'demo',
 }
 
+SEGMENT_TYPE_COLORS = {
+    'concept': '#2562B0',
+    'method': '#2E6E2E',
+    'demo': '#96580F',
+}
+
 
 def parse_master_md(path):
     """Главная функция: читает файл, возвращает dict для build_html."""
@@ -378,6 +384,29 @@ def _parse_text(block, prompt_counter):
         )
 
     return ''.join(parts)
+
+
+def _parse_map(block, segment_type):
+    """
+    block - содержимое после `### Карта` до `### Текст` (или конца).
+    segment_type - 'concept'/'method'/'demo' - определяет цвет border-left.
+    """
+    color = SEGMENT_TYPE_COLORS.get(segment_type, SEGMENT_TYPE_COLORS['concept'])
+    items = []
+    for raw in block.split('\n'):
+        line = raw.strip()
+        if not line:
+            continue
+        if not line.startswith('- '):
+            raise MasterMDParseError(f"В `### Карта` ожидался буллет `- ...`, нашёл: {line!r}")
+        body = line[2:].strip()
+        # Первое **...** - метка уровня (И)/(М)/(Д), остальное - текст
+        items.append(
+            f'<div class="insight" style="border-left-color:{color}">{_apply_inline(body)}</div>'
+        )
+    if not items:
+        raise MasterMDParseError("Пустой `### Карта`")
+    return f'<div class="insights">{"".join(items)}</div>'
 
 
 if __name__ == '__main__':
