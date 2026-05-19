@@ -54,6 +54,13 @@ SEGMENT_TYPE_COLORS = {
     'demo': '#96580F',
 }
 
+SEGMENT_TYPE_RULES = [
+    # (паттерны в **Тип**, тип виджета)
+    (['тезис', 'открытие', 'мотивация', 'введение'], 'concept'),
+    (['инструктаж', 'настройка', 'метод', 'инструкция'], 'method'),
+    (['демонстрация', 'практика', 'разбор', 'q&a', 'призыв'], 'demo'),
+]
+
 
 def parse_master_md(path):
     """Главная функция: читает файл, возвращает dict для build_html."""
@@ -156,7 +163,94 @@ def _parse_reconstruction(block):
 
 
 def _parse_segment(block, idx, prompt_counter):
-    raise NotImplementedError
+    """
+    block - `## Сегмент N | ... | ...` + всё содержимое до следующего разделителя.
+    idx - порядковый номер (1-based) для `id` ("01", "02", ...).
+    prompt_counter - список [int] для сквозной нумерации промптов.
+    """
+    lines = block.split('\n')
+    # Заголовок: `## Сегмент N | HH:MM:SS-HH:MM:SS | Тема`
+    header = lines[0]
+    m = re.match(r'##\s+Сегмент\s+\d+\s*\|\s*([\d:]+\s*[–-]\s*[\d:]+)\s*\|\s*(.+)', header)
+    if not m:
+        raise MasterMDParseError(f"Не разобран заголовок сегмента: {header!r}")
+    raw_timing = m.group(1).strip()
+    title = m.group(2).strip()
+
+    # Тайминг: «HH:MM:SS-HH:MM:SS» -> «HH:MM-HH:MM» (как в эталонном JSON)
+    timing = _shorten_timing(raw_timing)
+
+    # Поля **Тип:**, **Ключевая мысль:**
+    raw_type = None
+    key_thought = None
+    for line in lines[1:]:
+        line_s = line.strip()
+        m_t = re.match(r'\*\*Тип:\*\*\s*(.+)', line_s)
+        if m_t:
+            raw_type = m_t.group(1).strip()
+            continue
+        m_k = re.match(r'\*\*Ключевая мысль:\*\*\s*(.+)', line_s)
+        if m_k:
+            key_thought = m_k.group(1).strip()
+            continue
+
+    if raw_type is None:
+        raise MasterMDParseError(f"В сегменте {idx} не найдено `**Тип:** ...`")
+    if key_thought is None:
+        raise MasterMDParseError(f"В сегменте {idx} не найдено `**Ключевая мысль:** ...`")
+
+    segment_type = _classify_type(raw_type)
+
+    # Режем оставшуюся часть блока на ### Карта и ### Текст
+    body_text = '\n'.join(lines[1:])
+    map_match = re.search(r'\n###\s+Карта\s*\n(.*?)(?=\n###\s+Текст\s*\n|\Z)', body_text, re.DOTALL)
+    text_match = re.search(r'\n###\s+Текст\s*\n(.*)', body_text, re.DOTALL)
+
+    if not map_match:
+        raise MasterMDParseError(f"В сегменте {idx} не найден `### Карта`")
+    if not text_match:
+        raise MasterMDParseError(f"В сегменте {idx} не найден `### Текст`")
+
+    map_block = map_match.group(1).strip()
+    text_block = text_match.group(1).strip()
+
+    right_html = _parse_map(map_block, segment_type)
+    text_html = _parse_text(text_block, prompt_counter)
+    body_html = f'<p><strong>Ключевая мысль:</strong> {_apply_inline(key_thought)}</p>{text_html}'
+
+    return {
+        'id': f'{idx:02d}',
+        'type': segment_type,
+        'title': title,
+        'timing': timing,
+        'body': body_html,
+        'right': right_html,
+    }
+
+
+def _classify_type(raw_type):
+    norm = raw_type.lower()
+    # Берём первый из подстрок, который встретится - иначе concept
+    # Порядок: ищем первое совпадение по приоритету правил.
+    for patterns, t in SEGMENT_TYPE_RULES:
+        if any(p in norm for p in patterns):
+            return t
+    return 'concept'
+
+
+def _shorten_timing(raw):
+    """`00:00:00-00:03:38` -> `00:00-03:38`. Если уже короткий - оставляем."""
+    parts = re.split(r'\s*[–-]\s*', raw)
+    if len(parts) != 2:
+        return raw
+
+    def short(t):
+        bits = t.split(':')
+        if len(bits) == 3:
+            return f'{bits[0]}:{bits[1]}' if bits[0] != '00' else f'{bits[1]}:{bits[2]}'
+        return t
+
+    return f'{short(parts[0])}–{short(parts[1])}'
 
 
 def _apply_inline(text):
