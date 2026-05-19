@@ -234,6 +234,25 @@ def _render_blockquote(lines):
         return f'<div style="{style}"><strong>{label}:</strong> {_apply_inline(full)}</div>'
 
 
+def _render_prompt(label_text, code_text, pid):
+    """
+    label_text: содержимое между `**` и `:**` из строки `> **Промпт «...»:**`
+                (т.е. уже без префикса `> **` и без хвоста `:**`)
+    code_text:  тело fenced code block, без обрамляющих ```
+    pid:        строка идентификатора, напр. 'p1', 'p2'
+    """
+    safe_code = html.escape(code_text, quote=False)
+    return (
+        f'<div class="pr-block">'
+        f'<div class="pr-head">'
+        f'<span class="pr-label">{label_text}</span>'
+        f'<button class="pr-copy" id="cpb{pid}" onclick="cp(\'{pid}\')">копировать</button>'
+        f'</div>'
+        f'<div class="pr-text">{safe_code}</div>'
+        f'</div>'
+    )
+
+
 if __name__ == '__main__':
     import sys
     import json
