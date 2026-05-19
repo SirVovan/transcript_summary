@@ -253,6 +253,133 @@ def _render_prompt(label_text, code_text, pid):
     )
 
 
+def _parse_text(block, prompt_counter):
+    """
+    block - содержимое после `### Текст` до конца сегмента (без самой строки `### Текст`).
+    prompt_counter - список [int] (используется как изменяемая ссылка для сквозной нумерации p1, p2...).
+    Возвращает HTML-строку.
+    """
+    lines = block.split('\n')
+    parts = []  # выходные HTML-куски
+    i = 0
+    bq_buffer = None  # список «голых» строк текущего blockquote, без `> ` префикса
+    pending_prompt_label = None  # если последний bq был меткой промпта, ждём fenced
+
+    def flush_bq():
+        nonlocal bq_buffer, pending_prompt_label
+        if bq_buffer is None:
+            return
+        # Проверяем, не метка ли промпта
+        first = bq_buffer[0] if bq_buffer else ''
+        m = re.match(r'\*\*(Промпт[^*]*?):\*\*\s*$', first.strip())
+        if m and len(bq_buffer) == 1:
+            # Метка промпта - отложим, ждём fenced
+            pending_prompt_label = m.group(1).strip()
+        else:
+            parts.append(_render_blockquote(bq_buffer))
+        bq_buffer = None
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Fenced code block
+        if stripped.startswith('```'):
+            # Собираем код до закрывающего ```
+            code_lines = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith('```'):
+                code_lines.append(lines[i])
+                i += 1
+            if i >= len(lines):
+                raise MasterMDParseError("Незакрытый fenced code block в `### Текст`")
+            i += 1  # пропустить закрывающий ```
+            code_text = '\n'.join(code_lines)
+
+            flush_bq()
+            if pending_prompt_label is None:
+                raise MasterMDParseError(
+                    f"Fenced code block без предыдущей blockquote-метки промпта в `### Текст`. Код: {code_text[:60]!r}"
+                )
+            prompt_counter[0] += 1
+            pid = f'p{prompt_counter[0]}'
+            parts.append(_render_prompt(pending_prompt_label, code_text, pid))
+            pending_prompt_label = None
+            continue
+
+        # Blockquote
+        if stripped.startswith('>'):
+            content = re.sub(r'^>\s?', '', line)
+            if bq_buffer is None:
+                bq_buffer = []
+            bq_buffer.append(content.strip())
+            i += 1
+            continue
+
+        # Пустая строка
+        if stripped == '':
+            flush_bq()
+            # pending_prompt_label НЕ сбрасываем - между меткой и fenced может быть пустая строка
+            i += 1
+            continue
+
+        # Здесь начинается «обычный» контент -> flush bq и сбрасываем pending_prompt
+        if bq_buffer is not None:
+            flush_bq()
+        if pending_prompt_label is not None:
+            raise MasterMDParseError(
+                f"Метка промпта `**{pending_prompt_label}:**` без последующего fenced code block"
+            )
+
+        # Заголовок #### Шаг N
+        if stripped.startswith('#### '):
+            heading = stripped[5:].strip()
+            parts.append(f'<h3>{_apply_inline(heading)}</h3>')
+            i += 1
+            continue
+
+        # Маркированный список
+        if stripped.startswith('- '):
+            items = []
+            while i < len(lines) and lines[i].strip().startswith('- '):
+                items.append(f'<li style="margin-bottom:4px">{_apply_inline(lines[i].strip()[2:])}</li>')
+                i += 1
+            parts.append(f'<ul style="margin:4px 0 9px 18px;padding:0">{"".join(items)}</ul>')
+            continue
+
+        # Нумерованный список
+        if re.match(r'\d+\.\s+', stripped):
+            items = []
+            while i < len(lines) and re.match(r'\d+\.\s+', lines[i].strip()):
+                m_li = re.match(r'\d+\.\s+(.*)', lines[i].strip())
+                items.append(f'<li style="margin-bottom:4px">{_apply_inline(m_li.group(1))}</li>')
+                i += 1
+            parts.append(f'<ol style="margin:4px 0 9px 18px">{"".join(items)}</ol>')
+            continue
+
+        # Обычный абзац - копим строки до пустой
+        para_lines = []
+        while (
+            i < len(lines)
+            and lines[i].strip() != ''
+            and not lines[i].strip().startswith(('>', '#### ', '```', '- '))
+            and not re.match(r'\d+\.\s+', lines[i].strip())
+        ):
+            para_lines.append(lines[i].strip())
+            i += 1
+        if para_lines:
+            paragraph = ' '.join(para_lines)
+            parts.append(f'<p>{_apply_inline(paragraph)}</p>')
+
+    flush_bq()
+    if pending_prompt_label is not None:
+        raise MasterMDParseError(
+            f"Метка промпта `**{pending_prompt_label}:**` в конце `### Текст` без fenced code block"
+        )
+
+    return ''.join(parts)
+
+
 if __name__ == '__main__':
     import sys
     import json
