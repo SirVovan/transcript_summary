@@ -2,14 +2,13 @@
 """
 widget_generator.py — генератор HTML-виджета конспекта.
 
-Читает JSON-файл с контентом, выдаёт готовый HTML-виджет.
+Принимает мастер-MD или JSON, выдаёт готовый HTML-виджет.
 JS-экранирование полностью выполняет Python (json.dumps) —
 кириллические lookalike-символы в \\u-эскейпах исключены.
 
 Использование:
-    python widget_generator.py <content.json>
-
-Формат input JSON — см. widget.md раздел «Формат JSON».
+    python widget_generator.py <input.md>    # парсит мастер-MD напрямую
+    python widget_generator.py <input.json>  # резервный путь
 """
 
 import sys
@@ -548,16 +547,30 @@ def main():
         print(__doc__)
         sys.exit(1)
 
-    json_path = sys.argv[1]
-    if not os.path.exists(json_path):
-        print(f'Файл не найден: {json_path}', file=sys.stderr)
+    input_path = sys.argv[1]
+    if not os.path.exists(input_path):
+        print(f'Файл не найден: {input_path}', file=sys.stderr)
         sys.exit(1)
 
-    with open(json_path, encoding='utf-8') as f:
-        data = json.load(f)
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext == '.md':
+        # Импорт здесь, чтобы JSON-режим работал даже без md_parser
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from md_parser import parse_master_md, MasterMDParseError
+        try:
+            data = parse_master_md(input_path)
+        except MasterMDParseError as e:
+            print(f'Ошибка парсинга мастер-MD: {e}', file=sys.stderr)
+            sys.exit(3)
+    elif ext == '.json':
+        with open(input_path, encoding='utf-8') as f:
+            data = json.load(f)
+    else:
+        print(f'Неподдерживаемое расширение: {ext}. Ожидается .md или .json', file=sys.stderr)
+        sys.exit(1)
 
     out_name = data['meta'].get('out', 'widget_output.html')
-    out_dir  = os.path.dirname(os.path.abspath(json_path))
+    out_dir  = os.path.dirname(os.path.abspath(input_path))
 
     html     = build_html(data)
     out_path = os.path.join(out_dir, out_name)
