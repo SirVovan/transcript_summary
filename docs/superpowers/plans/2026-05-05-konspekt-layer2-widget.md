@@ -4,9 +4,11 @@
 
 **Goal:** Реализовать Слой 2 скилла /konspekt — конвертацию мастер-MD в HTML-виджет через JSON-промежуточный слой.
 
-**Architecture:** Три изменения: (1) расширить `widget_generator.py` поддержкой блока `reconstruction`; (2) создать `layer2_widget.md` с инструкциями для Claude; (3) обновить `SKILL.md`, добавив ШАГ 2.
+**Architecture:** Три изменения: (1) расширить `widget_generator.py` — добавить `build_reconstruction_html` и препендить реконструкцию как сегмент `'00'` в JS-данные; (2) создать `layer2_widget.md` с инструкциями для Claude; (3) обновить `SKILL.md`.
 
-**Tech Stack:** Python 3, pytest, node (для JS-валидации виджета)
+**Механика реконструкции:** `reconstruction` из JSON становится первым экраном виджета (сегмент `id='00'`, title='Логическая реконструкция') — пользователь открывает виджет, видит вводную главу, навигирует «Далее» к Сегменту 1. Никаких фиксированных блоков над контентом.
+
+**Tech Stack:** Python 3, pytest
 
 ---
 
@@ -15,7 +17,7 @@
 | Действие | Файл | Ответственность |
 |---|---|---|
 | Create | `tests/test_widget_generator.py` | Unit-тесты для `build_reconstruction_html` и `build_html` |
-| Modify | `.claude/skills/konspekt/widget_generator.py` | CSS + новая функция + рефакторинг `build_html` |
+| Modify | `.claude/skills/konspekt/widget_generator.py` | Новая функция + 5 строк в `build_html` |
 | Create | `.claude/skills/konspekt/layer2_widget.md` | Инструкции Claude для конвертации мастер-MD → JSON |
 | Modify | `.claude/skills/konspekt/SKILL.md` | Добавить ШАГ 2 и обновить ссылку на файл виджета |
 
@@ -25,7 +27,7 @@
 
 **Files:**
 - Create: `tests/test_widget_generator.py`
-- Modify: `.claude/skills/konspekt/widget_generator.py`
+- Modify: `.claude/skills/konspekt/widget_generator.py` (строки 279–298, после них)
 
 - [ ] **Шаг 1: Написать падающие тесты**
 
@@ -47,18 +49,16 @@ def test_reconstruction_with_table():
         ]
     }
     html = build_reconstruction_html(recon)
-    assert 'class="recon"' in html
-    assert 'Автор строит аргументацию через три шага.' in html
+    assert '<p>Автор строит аргументацию через три шага.</p>' in html
     assert 'Формулирует парадокс' in html
-    assert 'class="recon-table"' in html
+    assert '<table' in html
 
 
 def test_reconstruction_no_table():
     recon = {'prose': 'Один сегмент — единая тема.', 'table': []}
     html = build_reconstruction_html(recon)
-    assert 'class="recon"' in html
-    assert 'Один сегмент — единая тема.' in html
-    assert 'recon-table' not in html
+    assert '<p>Один сегмент — единая тема.</p>' in html
+    assert '<table' not in html
 
 
 def test_reconstruction_none():
@@ -79,9 +79,9 @@ def test_build_html_includes_reconstruction():
         ]
     }
     html = build_html(data)
-    assert 'class="recon"' in html
-    assert 'Тестовая реконструкция.' in html
-    assert 'Вводит проблему' in html
+    assert 'Тестовая реконструкция.' in html        # в BODY['00']
+    assert '"00"' in html                             # сегмент 00 в SEG
+    assert 'Логическая реконструкция' in html         # title в SEG
 
 
 def test_build_html_no_reconstruction():
@@ -94,7 +94,8 @@ def test_build_html_no_reconstruction():
         ]
     }
     html = build_html(data)
-    assert 'class="recon"' not in html
+    assert '"00"' not in html
+    assert 'Логическая реконструкция' not in html
 ```
 
 - [ ] **Шаг 2: Запустить тесты — убедиться, что падают**
@@ -104,33 +105,11 @@ cd d:\Users\Вова\Desktop\Work\VibeCoding\konspekt-project
 python -m pytest tests/test_widget_generator.py -v
 ```
 
-Ожидаемый результат: `ImportError: cannot import name 'build_reconstruction_html'` (или аналогичная ошибка — функция ещё не существует).
+Ожидаемый результат: `ImportError: cannot import name 'build_reconstruction_html'`
 
-- [ ] **Шаг 3: Добавить CSS для блока `recon` в `widget_generator.py`**
+- [ ] **Шаг 3: Добавить функцию `build_reconstruction_html` в `widget_generator.py`**
 
-В конце константы `CSS` (перед закрывающим `"""`), заменить:
-
-```python
-.toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}"""
-```
-
-на:
-
-```python
-.toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}
-
-.recon { flex-shrink:0; max-height:130px; overflow-y:auto; padding:10px 24px; border-bottom:1px solid var(--border); background:var(--surface2); }
-.recon::-webkit-scrollbar{width:3px} .recon::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-.recon-title { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--tx3); margin-bottom:5px; }
-.recon-prose { font-size:12.5px; color:var(--tx2); line-height:1.5; margin-bottom:6px; }
-.recon-table { width:100%; font-size:11px; border-collapse:collapse; }
-.recon-table th { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--tx3); text-align:left; padding:2px 14px 4px 0; border-bottom:1px solid var(--border2); }
-.recon-table td { color:var(--tx2); padding:3px 14px 3px 0; vertical-align:top; line-height:1.4; }"""
-```
-
-- [ ] **Шаг 4: Добавить функцию `build_reconstruction_html` в `widget_generator.py`**
-
-Вставить после функции `js_arr` (перед `def build_html`):
+Вставить сразу после функции `js_arr` (строка 298), перед `# ──── HTML-сборка`:
 
 ```python
 def build_reconstruction_html(recon):
@@ -138,112 +117,56 @@ def build_reconstruction_html(recon):
         return ''
     prose = recon.get('prose', '')
     table_rows = recon.get('table', [])
-    parts = [
-        '<div class="recon">',
-        '  <div class="recon-title">Логическая реконструкция</div>',
-        f'  <p class="recon-prose">{prose}</p>',
-    ]
+    parts = [f'<p>{prose}</p>']
     if table_rows:
+        cell = 'style="color:#4A4438;padding:3px 14px 3px 0;vertical-align:top;font-size:12px"'
+        th   = 'style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8C8278;text-align:left;padding:2px 14px 4px 0;border-bottom:1px solid rgba(60,52,36,.15)"'
         parts += [
-            '  <table class="recon-table">',
-            '    <thead><tr><th>Сегмент</th><th>Риторическая роль</th><th>Ключевой ход автора</th></tr></thead>',
-            '    <tbody>',
+            '<table style="width:100%;border-collapse:collapse;margin-top:10px">',
+            f'<thead><tr><th {th}>#</th><th {th}>Риторическая роль</th><th {th}>Ключевой ход автора</th></tr></thead>',
+            '<tbody>',
         ]
         for row in table_rows:
-            seg  = row.get('segment', '')
-            role = row.get('role', '')
-            move = row.get('move', '')
-            parts.append(f'      <tr><td>{seg}</td><td>{role}</td><td>{move}</td></tr>')
-        parts += ['    </tbody>', '  </table>']
-    parts.append('</div>')
+            parts.append(
+                f'<tr>'
+                f'<td {cell}>{row.get("segment","")}</td>'
+                f'<td {cell}>{row.get("role","")}</td>'
+                f'<td {cell}>{row.get("move","")}</td>'
+                f'</tr>'
+            )
+        parts += ['</tbody></table>']
     return '\n'.join(parts)
 ```
 
-- [ ] **Шаг 5: Рефакторинг `build_html` — вставить `reconstruction` в HTML**
+- [ ] **Шаг 4: Препендить реконструкцию как сегмент `'00'` в `build_html`**
 
-Заменить функцию `build_html` целиком:
+В функции `build_html` заменить:
 
 ```python
-def build_html(data):
-    meta     = data['meta']
-    prompts  = data.get('prompts', {})
-    segments = data['segments']
-
-    badge = meta['badge']
-    title = meta['title']
-
     body_dict  = {s['id']: s['body']  for s in segments}
     right_dict = {s['id']: s['right'] for s in segments}
 
+    # PR больше не нужен в JS — cp() читает текст из DOM (.pr-text)
+    # Сохраняем для обратной совместимости (пустой объект если промптов нет)
     pr_js    = 'var PR = ' + js_obj(prompts) + ';'
-    body_js  = 'var BODY = ' + js_obj(body_dict) + ';'
-    right_js = 'var RIGHT = ' + js_obj(right_dict) + ';'
-    seg_js   = 'var SEG = ' + js_arr(segments) + ';'
-
-    recon_html = build_reconstruction_html(data.get('reconstruction'))
-
-    lines = [
-        '<!DOCTYPE html>',
-        '<html lang="ru">',
-        '<head>',
-        '<meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        '<link rel="preconnect" href="https://fonts.googleapis.com">',
-        '<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">',
-        f'<title>{title}</title>',
-        '<style>',
-        CSS,
-        '</style>',
-        '</head>',
-        '<body>',
-        '',
-        '<div class="shell">',
-        '  <div class="topbar">',
-        '    <div class="topbar-left">',
-        f'      <span class="course-badge">{badge}</span>',
-        f'      <span class="course-title">{title}</span>',
-        '    </div>',
-        '    <div class="tabs" id="tabs"></div>',
-        '  </div>',
-        '  <div class="stripe" id="stripe"></div>',
-    ]
-
-    if recon_html:
-        lines.append(recon_html)
-
-    lines += [
-        '  <div class="body" id="body"></div>',
-        '  <div class="footer">',
-        '    <span class="f-info" id="finfo"></span>',
-        '    <div class="pw"><div class="pt"><div class="pf" id="pf" style="width:6%"></div></div></div>',
-        '    <div class="nav">',
-        '      <button class="btn" id="pb" onclick="go(-1)" disabled>← Назад</button>',
-        '      <button class="btn primary" id="nb" onclick="go(1)">Далее →</button>',
-        '    </div>',
-        '  </div>',
-        '</div>',
-        '',
-        '<script>',
-        JS_T,
-        '',
-        pr_js,
-        '',
-        body_js,
-        '',
-        right_js,
-        '',
-        seg_js,
-        '',
-        JS_ENGINE,
-        '</script>',
-        '</body>',
-        '</html>',
-    ]
-
-    return '\n'.join(lines)
 ```
 
-- [ ] **Шаг 6: Запустить тесты — убедиться, что все проходят**
+на:
+
+```python
+    body_dict  = {s['id']: s['body']  for s in segments}
+    right_dict = {s['id']: s['right'] for s in segments}
+
+    recon = data.get('reconstruction')
+    if recon:
+        body_dict  = {'00': build_reconstruction_html(recon), **body_dict}
+        right_dict = {'00': '<div class="insights"></div>', **right_dict}
+        segments   = [{'id': '00', 'type': 'concept', 'title': 'Логическая реконструкция', 'timing': ''}] + list(segments)
+
+    pr_js    = 'var PR = ' + js_obj(prompts) + ';'
+```
+
+- [ ] **Шаг 5: Запустить тесты — убедиться, что все проходят**
 
 ```
 python -m pytest tests/test_widget_generator.py -v
@@ -259,19 +182,19 @@ tests/test_widget_generator.py::test_build_html_no_reconstruction PASSED
 5 passed
 ```
 
-- [ ] **Шаг 7: Регрессионная проверка — регенерировать существующий виджет**
+- [ ] **Шаг 6: Регрессионная проверка**
 
 ```
 python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет — Тайминг Практикум День 1 ч1.json"
 ```
 
-Ожидаемый результат: `✅ JS syntax OK`. Виджет открывается в браузере, сегменты работают (у этого виджета нет `reconstruction` в JSON — убедиться, что блок просто отсутствует и ничего не сломалось).
+Ожидаемый результат: `✅ JS syntax OK`. Виджет без `reconstruction` в JSON работает, сегменты `01`/`02`/`03` на месте, `'00'` отсутствует.
 
-- [ ] **Шаг 8: Коммит**
+- [ ] **Шаг 7: Коммит**
 
 ```
 git add tests/test_widget_generator.py .claude/skills/konspekt/widget_generator.py
-git commit -m "feat(konspekt): add reconstruction panel to widget_generator"
+git commit -m "feat(konspekt): add reconstruction as intro chapter (segment 00)"
 ```
 
 ---
@@ -281,9 +204,11 @@ git commit -m "feat(konspekt): add reconstruction panel to widget_generator"
 **Files:**
 - Create: `.claude/skills/konspekt/layer2_widget.md`
 
-- [ ] **Шаг 1: Создать файл `.claude/skills/konspekt/layer2_widget.md` с точным содержимым:**
+- [ ] **Шаг 1: Создать файл**
 
-```markdown
+Содержимое файла `.claude/skills/konspekt/layer2_widget.md`:
+
+````markdown
 # Слой 2: Виджет
 
 ## Назначение
@@ -319,7 +244,9 @@ git commit -m "feat(konspekt): add reconstruction panel to widget_generator"
   ```json
   [{"segment": "1", "role": "Риторическая роль", "move": "Ключевой ход автора"}]
   ```
-  Если таблицы нет (один сегмент в мастер-MD) → `"table": []`
+  Если таблицы нет (один сегмент в мастер-MD) — `"table": []`
+
+Реконструкция становится первым экраном виджета («Логическая реконструкция», сегмент 00).
 
 ### Поле `segments`
 
@@ -341,9 +268,9 @@ git commit -m "feat(konspekt): add reconstruction panel to widget_generator"
 
 **`timing`** — таймштампы из заголовка, формат `"HH:MM–HH:MM"`
 
-**`body`** — полный `### Текст` → HTML (см. ниже)
+**`body`** — полный `### Текст` → HTML (см. раздел ниже)
 
-**`right`** — полный `### Карта` → HTML (см. ниже)
+**`right`** — полный `### Карта` → HTML (см. раздел ниже)
 
 ---
 
@@ -433,18 +360,18 @@ python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет �
 ## Шаг 4. Проверить
 
 1. Открыть HTML в браузере
-2. Блок «Логическая реконструкция» виден над сегментами
-3. Левая колонка каждого сегмента = полный `### Текст` (текст, не буллеты)
-4. Правая колонка = все карточки из `### Карта` (без сокращений)
-5. Специальные блоки (Лайфхак/Важно/Демонстрация) отображаются с цветной левой рамкой
-6. Навигация между сегментами работает
-```
+2. Первый экран — «Логическая реконструкция» с абзацем и таблицей (если сегментов > 1)
+3. Кнопка «Далее» ведёт к Сегменту 1
+4. Левая колонка каждого сегмента = полный `### Текст`
+5. Правая колонка = все карточки из `### Карта`
+6. Специальные блоки (Лайфхак/Важно/Демонстрация) с цветной левой рамкой
+````
 
 - [ ] **Шаг 2: Коммит**
 
 ```
 git add .claude/skills/konspekt/layer2_widget.md
-git commit -m "feat(konspekt): add layer2_widget.md — master-MD to widget conversion instructions"
+git commit -m "feat(konspekt): add layer2_widget.md"
 ```
 
 ---
@@ -454,20 +381,23 @@ git commit -m "feat(konspekt): add layer2_widget.md — master-MD to widget conv
 **Files:**
 - Modify: `.claude/skills/konspekt/SKILL.md`
 
-- [ ] **Шаг 1: Обновить ссылку на файл виджета в разделе «Файлы скилла»**
+- [ ] **Шаг 1: Обновить ссылку на файл виджета**
 
-Заменить:
+В разделе «Файлы скилла» заменить строку:
+
 ```
 - `widget.md` — виджет (Слой 2, отдельный пайплайн)
 ```
+
 на:
+
 ```
 - `layer2_widget.md` — виджет (Слой 2, конвертация мастер-MD → JSON → HTML)
 ```
 
-- [ ] **Шаг 2: Добавить раздел «Слой 2» в `SKILL.md`**
+- [ ] **Шаг 2: Добавить раздел «Слой 2»**
 
-После раздела `## Выходной файл` (после строки «Используется:...» и перед `## Точки остановки`) добавить:
+После раздела `## Выходной файл` (перед `## Точки остановки`) добавить:
 
 ```markdown
 ---
@@ -490,12 +420,34 @@ git commit -m "feat(konspekt): add Layer 2 step to SKILL.md"
 
 ## Финальная проверка
 
-- [ ] **Регенерировать тестовый виджет с `reconstruction`**
+- [ ] **Добавить `reconstruction` в тестовый JSON и регенерировать виджет**
 
-Добавить `reconstruction` в `transcripts/Виджет — Тайминг Практикум День 1 ч1.json` на основе данных из `transcripts/validation_formatting_мастер.md`, затем регенерировать виджет:
+Добавить поле `reconstruction` в `transcripts/Виджет — Тайминг Практикум День 1 ч1.json`:
+
+```json
+"reconstruction": {
+  "prose": "Никита выстраивает первую часть практикума в три хода: сначала задаёт формат работы и объясняет логику инструмента, затем разбирает настройку таймера на конкретном примере, наконец переходит к живой практике — пишет instructions.md вместе с участниками.",
+  "table": [
+    {"segment": "1", "role": "Открытие / мотивация", "move": "Задаёт формат, объясняет зачем нужен таймер"},
+    {"segment": "2", "role": "Инструктаж-практика", "move": "Объясняет настройку, разбирает кейс участника"},
+    {"segment": "3", "role": "Демонстрация + практика", "move": "Показывает, как писать instructions.md вместе с участниками"}
+  ]
+}
+```
+
+Затем регенерировать:
 
 ```
 python ".claude/skills/konspekt/widget_generator.py" "transcripts/Виджет — Тайминг Практикум День 1 ч1.json"
 ```
 
-Открыть в браузере: блок реконструкции должен отображаться над сегментами.
+Ожидаемый результат: `✅ JS syntax OK`
+
+Открыть в браузере: первый экран — «Логическая реконструкция» с абзацем и таблицей из 3 строк. Кнопка «Далее» → Сегмент 01.
+
+- [ ] **Коммит**
+
+```
+git add "transcripts/Виджет — Тайминг Практикум День 1 ч1.json" "transcripts/Виджет — Тайминг Практикум День 1 ч1.html"
+git commit -m "feat(konspekt): add reconstruction to validation widget"
+```
