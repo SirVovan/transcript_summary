@@ -130,6 +130,15 @@ def _parse_segment(block, idx, prompt_counter):
     raise NotImplementedError
 
 
+def _apply_inline(text):
+    """`**жирное**` -> <strong>, `*курсив*` -> <em>. Жирное обрабатываем первым."""
+    # Сначала жирное (двойные звёздочки)
+    text = re.sub(r'\*\*([^\n]+?)\*\*', r'<strong>\1</strong>', text)
+    # Потом курсив (одиночные звёздочки, не часть **)
+    text = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', text)
+    return text
+
+
 if __name__ == '__main__':
     import sys
     import json
