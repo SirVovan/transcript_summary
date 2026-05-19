@@ -159,7 +159,72 @@ def _parse_meta(header, path):
 
 
 def _parse_reconstruction(block):
-    raise NotImplementedError
+    """`## Логическая реконструкция\n\n...` -> {prose, table}."""
+    # Удаляем строку заголовка
+    body = re.sub(r'^##\s+Логическая реконструкция\s*\n', '', block, count=1)
+    lines = body.split('\n')
+
+    prose_parts = []  # HTML-куски
+    table_rows = []
+    i = 0
+    bq_buffer = None
+
+    def flush_bq():
+        nonlocal bq_buffer
+        if bq_buffer is not None:
+            prose_parts.append(_render_blockquote(bq_buffer))
+            bq_buffer = None
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Старт таблицы
+        if stripped.startswith('|') and i + 1 < len(lines) and re.match(r'\|\s*-+\s*\|', lines[i + 1]):
+            # Заголовок таблицы (строка с `|`)
+            i += 2  # пропускаем заголовок и разделитель
+            while i < len(lines) and lines[i].strip().startswith('|'):
+                cells = [c.strip() for c in lines[i].strip().strip('|').split('|')]
+                if len(cells) >= 3:
+                    table_rows.append({
+                        'segment': cells[0],
+                        'role': cells[1],
+                        'move': cells[2],
+                    })
+                i += 1
+            continue
+
+        if stripped.startswith('>'):
+            content = re.sub(r'^>\s?', '', line)
+            if bq_buffer is None:
+                bq_buffer = []
+            bq_buffer.append(content.strip())
+            i += 1
+            continue
+
+        if stripped == '':
+            flush_bq()
+            i += 1
+            continue
+
+        if bq_buffer is not None:
+            flush_bq()
+
+        # Абзац
+        para_lines = []
+        while i < len(lines) and lines[i].strip() != '' and not lines[i].strip().startswith(('>', '|')):
+            para_lines.append(lines[i].strip())
+            i += 1
+        if para_lines:
+            paragraph = ' '.join(para_lines)
+            prose_parts.append(f'<p>{_apply_inline(paragraph)}</p>')
+
+    flush_bq()
+
+    return {
+        'prose': ''.join(prose_parts),
+        'table': table_rows,
+    }
 
 
 def _parse_segment(block, idx, prompt_counter):
