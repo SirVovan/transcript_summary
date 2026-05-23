@@ -40,7 +40,13 @@
       "Bash(python .claude/skills/konspekt/preprocessor.py windows \"transcripts/ПОЛНЫЙ курс Claude Code 2026 ч1.txt\" --near 01:05:00)",
       "Bash(gh pr *)",
       "Bash(PYTHONUTF8=1 python -c \"import json; d=json.load\\(open\\(r'D:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project/transcripts/Виджет — Урок 2.json', encoding='utf-8'\\)\\); print\\('meta:', d.get\\('meta'\\)\\); print\\('reconstruction keys:', list\\(d.get\\('reconstruction', {}\\).keys\\(\\)\\)\\); print\\('trajectory:', type\\(d.get\\('trajectory'\\)\\).__name__\\); print\\('segments count:', len\\(d.get\\('segments', []\\)\\)\\); print\\('segments ids:', [s.get\\('id'\\) for s in d.get\\('segments', []\\)]\\); print\\('prompts:', d.get\\('prompts'\\)\\)\")",
-      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Урок 2.json\")"
+      "Bash(PYTHONUTF8=1 python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Урок 2.json\")",
+      "Bash(PYTHONUTF8=1 python *)",
+      "Bash(codex --version)",
+      "Bash(codex exec *)",
+      "Bash(grep -i \"мастер.md$\")",
+      "Bash(awk '/^## ШАГ 2/,/^## ШАГ 3/' .claude/skills/konspekt/SKILL.md)",
+      "Bash(python *)"
     ]
   }
 }

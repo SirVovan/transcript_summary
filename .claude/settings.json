@@ -51,7 +51,9 @@
       "Bash(xargs -0 git rm --cached)",
       "PowerShell($env:PYTHONUTF8=1; python \"transcripts/_build_widget_json.py\")",
       "PowerShell($env:PYTHONUTF8=1; python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Вайбкодинг. Модуль 1. Урок 2.json\")",
-      "Bash(rm \"transcripts/_build_widget_json.py\")"
+      "Bash(rm \"transcripts/_build_widget_json.py\")",
+      "Bash(git -C \"d:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project\" log --oneline -n 15)",
+      "Bash(grep -iE \"\\\\.\\(png|jpg|jpeg|webp|gif\\)$\")"
     ],
     "additionalDirectories": [
       "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts",
