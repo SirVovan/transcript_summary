@@ -369,6 +369,14 @@ def _render_blockquote(lines):
     )
 
     rest = lines[1:]
+
+    # Отрезаем хвостовую прозу: список + пустая `>` + проза → разделяем.
+    tail_prose_lines = []
+    if '' in rest:
+        blank_idx = rest.index('')
+        tail_prose_lines = [l for l in rest[blank_idx + 1:] if l]
+        rest = rest[:blank_idx]
+
     # Определяем тип хвоста: нумерованный список, маркированный, или просто проза.
     # ВАЖНО: между </strong> и <ol>/<ul> всегда ставим пробел (как в эталонном JSON).
     if rest and re.match(r'\d+\.\s+', rest[0]):
@@ -379,6 +387,8 @@ def _render_blockquote(lines):
                 raise MasterMDParseError(f"В нумерованном списке blockquote сломанный элемент: {line!r}")
             items.append(f'<li>{_apply_inline(m_li.group(1))}</li>')
         body = f'<ol style="margin:6px 0 0 18px">{"".join(items)}</ol>'
+        if tail_prose_lines:
+            body += f'<div style="margin-top:6px">{_apply_inline(" ".join(tail_prose_lines))}</div>'
         prefix = f'{_apply_inline(inline_after_label)}' if inline_after_label else ''
         return f'<div style="{style}"><strong>{label}:</strong> {prefix}{body}</div>'
     elif rest and re.match(r'-\s+', rest[0]):
@@ -389,6 +399,8 @@ def _render_blockquote(lines):
                 raise MasterMDParseError(f"В маркированном списке blockquote сломанный элемент: {line!r}")
             items.append(f'<li>{_apply_inline(m_li.group(1))}</li>')
         body = f'<ul style="margin:6px 0 0 18px">{"".join(items)}</ul>'
+        if tail_prose_lines:
+            body += f'<div style="margin-top:6px">{_apply_inline(" ".join(tail_prose_lines))}</div>'
         prefix = f'{_apply_inline(inline_after_label)}' if inline_after_label else ''
         return f'<div style="{style}"><strong>{label}:</strong> {prefix}{body}</div>'
     else:
