@@ -6,6 +6,10 @@ __pycache__/
 transcripts/**
 !transcripts/.gitkeep
 
+# Одноразовые patch-скрипты Слоя 3 — артефакты конкретных лекций, не код скилла.
+# Шаблон для копирования: .claude/skills/konspekt/recon_patch_template.py
+patch_recon_*.py
+
 # OS
 .DS_Store
 Thumbs.db
