@@ -53,12 +53,25 @@
       "PowerShell($env:PYTHONUTF8=1; python \".claude/skills/konspekt/widget_generator.py\" \"transcripts/Виджет — Вайбкодинг. Модуль 1. Урок 2.json\")",
       "Bash(rm \"transcripts/_build_widget_json.py\")",
       "Bash(git -C \"d:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project\" log --oneline -n 15)",
-      "Bash(grep -iE \"\\\\.\\(png|jpg|jpeg|webp|gif\\)$\")"
+      "Bash(grep -iE \"\\\\.\\(png|jpg|jpeg|webp|gif\\)$\")",
+      "Bash(ls \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/\")",
+      "Read(//f/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/**)",
+      "Bash(mkdir -p \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Архив/before-2026-05-23/\")",
+      "Bash(cp \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/ПОЛНЫЙ курс Claude Code 2026 ч1_мастер.md\" \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Архив/before-2026-05-23/\")",
+      "Bash(cp \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Виджет — ПОЛНЫЙ курс Claude Code 2026 ч1.html\" \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Архив/before-2026-05-23/\")",
+      "Bash(cp \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Виджет — ПОЛНЫЙ курс Claude Code 2026 ч1.json\" \"f:/Наш Архив/ИИ/Никита Велс. 3 часовой Курс по Claude Code/Архив/before-2026-05-23/\")",
+      "Bash(git log *)",
+      "Bash(powershell -Command \"Get-Item 'docs\\\\history.md','D:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\vibecoding vault\\\\projects\\\\konspekt-project.md' | Select-Object FullName, Length\")",
+      "Bash(powershell -Command \"Get-Content 'docs\\\\history.md' | Measure-Object -Line; Get-Content 'D:\\\\Users\\\\Вова\\\\Desktop\\\\Work\\\\VibeCoding\\\\vibecoding vault\\\\projects\\\\konspekt-project.md' | Measure-Object -Line\")",
+      "Bash(powershell -Command \"Get-Item 'patch_recon_velis_ch2.py','patch_recon_m2u10_2.py','patch_recon_vels_d1c1.py','patch_recon_velis_ch1.py','.claude\\\\skills\\\\konspekt\\\\SKILL.md','.claude\\\\skills\\\\konspekt\\\\profile_lecture.md' | Select-Object Name, LastWriteTime | Format-Table -AutoSize\")",
+      "Bash(type .gitignore 2>nul)",
+      "Bash(git reset *)"
     ],
     "additionalDirectories": [
       "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts",
       "d:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\.claude\\skills",
-      "D:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts"
+      "D:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project\\transcripts",
+      "D:\\Users\\Вова\\Desktop\\Work\\VibeCoding\\konspekt-project"
     ]
   },
   "hooks": {

@@ -46,7 +46,11 @@
       "Bash(codex exec *)",
       "Bash(grep -i \"мастер.md$\")",
       "Bash(awk '/^## ШАГ 2/,/^## ШАГ 3/' .claude/skills/konspekt/SKILL.md)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(cd \"D:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project/.claude/skills/konspekt\")",
+      "Bash(start \"\" \"transcripts/Виджет — Велс. Практикум Д1-Ч1. С чего начинается сборка агентной системы.html\")",
+      "Bash(find . -iname \"history.md\" -not -path \"*/node_modules/*\")",
+      "Bash(ls \"D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/projects/konspekt-project.md\")"
     ]
   }
 }
