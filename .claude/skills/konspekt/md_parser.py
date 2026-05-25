@@ -160,11 +160,70 @@ def _parse_meta(header, path):
 
 
 def _parse_route(block):
-    """`## Замысел и маршрут\n\n...` -> {'prose': <html>, 'structure': <html>}.
+    """`## Замысел и маршрут\n\n<prose>\n\n**<Label>:**\n\n<list>` -> {'prose', 'structure'}.
 
-    Полная реализация в Task 2. Пока возвращает заглушку, чтобы тесты Task 1 проходили.
+    Маркер опорной структуры — любая строка целиком вида `**Label:**` (без текста после).
+    Парсер не интерпретирует форму списка — отдаёт как нумерованный/маркированный список HTML.
+    Если маркера нет — весь блок считается прозой, structure == ''.
     """
-    return {'prose': '', 'structure': ''}
+    body = re.sub(r'^##\s+Замысел и маршрут\s*\n', '', block, count=1)
+    lines = body.split('\n')
+
+    # Находим строку-маркер: `**...:**` на своей строке (после strip — ровно эта запись).
+    marker_re = re.compile(r'^\*\*[^*\n]+:\*\*\s*$')
+    split_idx = None
+    for idx, line in enumerate(lines):
+        if marker_re.match(line.strip()):
+            split_idx = idx
+            break
+
+    if split_idx is None:
+        prose_lines = lines
+        structure_lines = []
+    else:
+        prose_lines = lines[:split_idx]
+        structure_lines = lines[split_idx + 1:]
+
+    prose_html = _render_paragraphs(prose_lines)
+    structure_html = _render_list(structure_lines)
+
+    return {'prose': prose_html, 'structure': structure_html}
+
+
+def _render_paragraphs(lines):
+    """Список строк (с пустыми разделителями) -> склейка `<p>...</p>` через _apply_inline."""
+    paragraphs = []
+    buf = []
+    for line in lines:
+        if line.strip() == '':
+            if buf:
+                paragraphs.append(_apply_inline(' '.join(buf).strip()))
+                buf = []
+        else:
+            buf.append(line.strip())
+    if buf:
+        paragraphs.append(_apply_inline(' '.join(buf).strip()))
+    return ''.join(f'<p>{p}</p>' for p in paragraphs)
+
+
+def _render_list(lines):
+    """Строки после маркера -> `<ol>` если нумерованный, `<ul>` если маркированный, иначе абзацы."""
+    items = [l.strip() for l in lines if l.strip()]
+    if not items:
+        return ''
+
+    if all(re.match(r'\d+\.\s+', it) for it in items):
+        body = ''.join(
+            f'<li>{_apply_inline(re.match(r"\d+\.\s+(.*)", it).group(1))}</li>'
+            for it in items
+        )
+        return f'<ol style="margin:6px 0 0 18px">{body}</ol>'
+    if all(it.startswith('- ') for it in items):
+        body = ''.join(f'<li>{_apply_inline(it[2:])}</li>' for it in items)
+        return f'<ul style="margin:6px 0 0 18px">{body}</ul>'
+
+    # Смесь форматов или просто абзацы — рендерим как абзацы для устойчивости.
+    return _render_paragraphs(lines)
 
 
 def _parse_reconstruction(block):
