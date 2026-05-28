@@ -82,5 +82,49 @@ def format_srt(segments: list[dict]) -> str:
     return "\n".join(blocks)
 
 
-def rebucket(*args, **kwargs):
-    raise NotImplementedError("rebucket будет реализована в следующем шаге")
+def rebucket(segments: list[dict], block_seconds: int = BLOCK_SECONDS) -> list[dict]:
+    if not segments:
+        return []
+
+    block_ms = block_seconds * 1000
+    buckets = []
+    current_bucket = None
+
+    for segment in segments:
+        block_start_ms = (segment["start_ms"] // block_ms) * block_ms
+        is_long_segment = segment["end_ms"] - segment["start_ms"] > block_ms
+
+        if is_long_segment:
+            if current_bucket is not None:
+                buckets.append(current_bucket)
+                current_bucket = None
+            buckets.append(
+                {
+                    "index": 0,
+                    "start_ms": block_start_ms,
+                    "end_ms": segment["end_ms"],
+                    "text": segment["text"],
+                }
+            )
+            continue
+
+        if current_bucket and current_bucket["start_ms"] == block_start_ms:
+            current_bucket["text"] = f"{current_bucket['text']} {segment['text']}"
+            current_bucket["end_ms"] = segment["end_ms"]
+        else:
+            if current_bucket is not None:
+                buckets.append(current_bucket)
+            current_bucket = {
+                "index": 0,
+                "start_ms": block_start_ms,
+                "end_ms": segment["end_ms"],
+                "text": segment["text"],
+            }
+
+    if current_bucket is not None:
+        buckets.append(current_bucket)
+
+    for index, bucket in enumerate(buckets, start=1):
+        bucket["index"] = index
+
+    return buckets
