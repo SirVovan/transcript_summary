@@ -128,3 +128,105 @@ def rebucket(segments: list[dict], block_seconds: int = BLOCK_SECONDS) -> list[d
         bucket["index"] = index
 
     return buckets
+
+
+def _slugify(title: str) -> str:
+    slug = re.sub(r"[^\w\s]", "", title, flags=re.UNICODE).strip()
+    slug = re.sub(r"\s+", "_", slug, flags=re.UNICODE)[:80].strip("_")
+    return slug or "youtube_video"
+
+
+def _get_video_title(url: str) -> str:
+    result = subprocess.run(
+        ["yt-dlp", "--get-title", "--no-warnings", url],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"yt-dlp failed to get video title: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def download_subtitles(url: str, output_dir: Path) -> Path:
+    title = _get_video_title(url)
+    slug = _slugify(title)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tmp_template = str(output_dir / f"_tmp_{slug}.%(ext)s")
+
+    subprocess.run(
+        [
+            "yt-dlp",
+            "--write-subs",
+            "--sub-langs",
+            "orig",
+            "--sub-format",
+            "srt",
+            "--skip-download",
+            "--no-warnings",
+            "-o",
+            tmp_template,
+            url,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    tmp_files = sorted(output_dir.glob(f"_tmp_{slug}*.srt"))
+
+    if not tmp_files:
+        subprocess.run(
+            [
+                "yt-dlp",
+                "--write-auto-subs",
+                "--sub-langs",
+                "orig",
+                "--sub-format",
+                "srt",
+                "--skip-download",
+                "--no-warnings",
+                "-o",
+                tmp_template,
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        tmp_files = sorted(output_dir.glob(f"_tmp_{slug}*.srt"))
+
+    if not tmp_files:
+        print(
+            "ERROR: У этого видео нет субтитров (ни ручных, ни авто).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    tmp_srt = tmp_files[0]
+    content = tmp_srt.read_text(encoding="utf-8")
+    formatted = format_srt(rebucket(parse_srt(content)))
+
+    base_name = f"SRC_transcript_{slug}"
+    final_path = output_dir / f"{base_name}.srt"
+    version = 2
+    while final_path.exists():
+        final_path = output_dir / f"{base_name}_v{version}.srt"
+        version += 1
+
+    final_path.write_text(formatted, encoding="utf-8")
+    tmp_srt.unlink()
+    return final_path
+
+
+def main():
+    if len(sys.argv) != 3:
+        print("Usage: youtube_to_srt.py <youtube_url> <output_dir>", file=sys.stderr)
+        sys.exit(1)
+
+    url, output_dir = sys.argv[1], Path(sys.argv[2])
+    final_path = download_subtitles(url, output_dir)
+    print(str(final_path))
+
+
+if __name__ == "__main__":
+    main()
