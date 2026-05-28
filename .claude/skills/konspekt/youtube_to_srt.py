@@ -22,6 +22,11 @@ APP_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "konspekt-yo
 DEFAULT_COOKIES_BROWSER = "edge"
 SUPPORTED_COOKIES_BROWSERS = ("edge", "chrome", "firefox")
 
+# Приоритетный список языков для скачивания субтитров.
+# yt-dlp умеет одновременно тянуть несколько языков; мы потом выбираем
+# первый существующий из этого списка как «лучший доступный».
+SUB_LANGS_PRIORITY = ("ru-orig", "ru", "en-orig", "en")
+
 TIMESTAMP_RE = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s+-->\s+"
     r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})"
@@ -220,9 +225,9 @@ def _is_cookie_error(stderr: str) -> bool:
     """Определяет, требует ли ошибка yt-dlp обновления cookies."""
     s = (stderr or "").lower()
     return (
-        "sign in to confirm" in s and "bot" in s
-        or "could not find" in s and "cookies database" in s
-        or "could not copy" in s and "cookie database" in s
+        ("sign in to confirm" in s and "bot" in s)
+        or ("could not find" in s and "cookies database" in s)
+        or ("could not copy" in s and "cookie database" in s)
     )
 
 
@@ -239,9 +244,17 @@ def _slugify(title: str) -> str:
 
 
 def _get_video_title(url: str, cookies_browser: str) -> str:
+    # -f sb0 (storyboard) — самый легковесный формат, гарантированно доступен.
+    # Без указания формата yt-dlp пытается подобрать видеопоток и падает с
+    # "Requested format is not available" на видео, где стандартных потоков нет
+    # (например, на стримах или некоторых live-replays).
     cmd = [
         "yt-dlp",
-        "--get-title",
+        "--print",
+        "title",
+        "--skip-download",
+        "-f",
+        "sb0",
         "--no-warnings",
         "--cookies-from-browser",
         _cookies_browser_spec(cookies_browser),
@@ -265,14 +278,20 @@ def _get_video_title(url: str, cookies_browser: str) -> str:
 
 def _try_yt_dlp_subs(url: str, tmp_template: str, sub_flag: str, cookies_browser: str):
     """Один запуск yt-dlp за субтитрами. Возвращает CompletedProcess."""
+    # -f sb0: см. комментарий в _get_video_title. На видео без стандартных
+    # видеопотоков yt-dlp с --skip-download всё равно пытается подобрать
+    # видеопоток и падает с "Requested format is not available", не доходя
+    # до записи субтитров.
     cmd = [
         "yt-dlp",
         sub_flag,
         "--sub-langs",
-        "orig",
+        ",".join(SUB_LANGS_PRIORITY),
         "--sub-format",
         "srt",
         "--skip-download",
+        "-f",
+        "sb0",
         "--no-warnings",
         "--cookies-from-browser",
         _cookies_browser_spec(cookies_browser),
@@ -283,6 +302,31 @@ def _try_yt_dlp_subs(url: str, tmp_template: str, sub_flag: str, cookies_browser
     return subprocess.run(
         cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
+
+
+def _pick_best_tmp_srt(output_dir: Path, slug: str) -> Path | None:
+    """Выбирает первый скачанный tmp-файл по приоритету SUB_LANGS_PRIORITY.
+
+    yt-dlp может скачать сразу несколько языков; имена tmp-файлов вида
+    `_tmp_{slug}.{lang}.srt`. Берём первый существующий из приоритетного
+    списка, остальные пусть удалятся при общей очистке.
+    """
+    for lang in SUB_LANGS_PRIORITY:
+        candidate = output_dir / f"_tmp_{slug}.{lang}.srt"
+        if candidate.exists():
+            return candidate
+    # Фолбэк: вдруг yt-dlp использовал label не из нашего списка.
+    fallback = sorted(output_dir.glob(f"_tmp_{slug}*.srt"))
+    return fallback[0] if fallback else None
+
+
+def _cleanup_tmp_srts(output_dir: Path, slug: str) -> None:
+    """Удаляет ВСЕ tmp-файлы для данного slug — после успешной обработки."""
+    for path in output_dir.glob(f"_tmp_{slug}*.srt"):
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def download_subtitles(url: str, output_dir: Path, cookies_browser: str = DEFAULT_COOKIES_BROWSER) -> Path:
@@ -296,6 +340,7 @@ def download_subtitles(url: str, output_dir: Path, cookies_browser: str = DEFAUL
     output_dir.mkdir(parents=True, exist_ok=True)
     tmp_template = str(output_dir / f"_tmp_{slug}.%(ext)s")
 
+    tmp_srt: Path | None = None
     for sub_flag in ("--write-subs", "--write-auto-subs"):
         result = _try_yt_dlp_subs(url, tmp_template, sub_flag, cookies_browser)
         if result.returncode != 0 and _is_cookie_error(result.stderr):
@@ -304,20 +349,17 @@ def download_subtitles(url: str, output_dir: Path, cookies_browser: str = DEFAUL
                 file=sys.stderr,
             )
             sys.exit(3)
-        tmp_files = sorted(output_dir.glob(f"_tmp_{slug}*.srt"))
-        if tmp_files:
+        tmp_srt = _pick_best_tmp_srt(output_dir, slug)
+        if tmp_srt:
             break
-    else:
-        tmp_files = []
 
-    if not tmp_files:
+    if tmp_srt is None:
         print(
             "ERROR: У этого видео нет субтитров (ни ручных, ни авто).",
             file=sys.stderr,
         )
         sys.exit(2)
 
-    tmp_srt = tmp_files[0]
     content = tmp_srt.read_text(encoding="utf-8")
     formatted = format_srt(rebucket(parse_srt(content)))
 
@@ -329,7 +371,7 @@ def download_subtitles(url: str, output_dir: Path, cookies_browser: str = DEFAUL
         version += 1
 
     final_path.write_text(formatted, encoding="utf-8")
-    tmp_srt.unlink()
+    _cleanup_tmp_srts(output_dir, slug)
     return final_path
 
 
