@@ -1,14 +1,16 @@
-# /konspekt-preview Implementation Plan
+# /konspekt preview Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Реализовать скилл `/konspekt-preview` — один проход агента, который читает транскрипт (локальный или скачанный с YouTube) и пишет связный нарративный обзор ~800–950 слов с рекомендацией по глубине обработки.
+**Goal:** Реализовать режим `preview` внутри существующего скилла `/konspekt` — один проход агента, который читает транскрипт (локальный или скачанный с YouTube) и пишет связный нарративный обзор ~800–950 слов с рекомендацией по глубине обработки.
 
-**Architecture:** Markdown-driven скилл (SKILL.md как промпт-инструкция для агента) + Python-помощник для YouTube (`yt-dlp` + переразбивка SRT в 30-секундные блоки). Без субагентов, без хуков, без чанкования.
+**Architecture:** Режим внутри общей структуры `/konspekt`, по аналогии с режимом «виджет». Самодостаточный `preview.md` рядом с `SKILL.md` (изоляция правил мастер-MD). Общая утилита `youtube_to_srt.py` в корне скилла. Минимальные правки в существующий `SKILL.md`.
 
-**Tech Stack:** Markdown (SKILL.md), Python 3 + `yt-dlp` CLI, pytest для юнит-тестов.
+**Tech Stack:** Markdown (preview.md как промпт-инструкция), Python 3 + `yt-dlp` CLI, pytest. Реализация Python-кода — через **`codex exec`** как сабагента из Bash; SKILL.md/preview.md и end-to-end — Claude.
 
 **Спецификация:** [docs/superpowers/specs/2026-05-28-konspekt-preview-design.md](../specs/2026-05-28-konspekt-preview-design.md)
+
+**Опорная заметка про codex:** `D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/knowledge/codex-as-subagent.md` — точные флаги `codex exec`, замеры, подводные камни.
 
 ---
 
@@ -16,75 +18,107 @@
 
 **Создаются:**
 
-- `.claude/skills/konspekt-preview/SKILL.md` (~250 строк) — промпт-инструкция: когда вызывается, как обрабатывать входы, шаблон обзора, правила сохранения, граничные случаи.
-- `.claude/skills/konspekt-preview/youtube_to_srt.py` (~120 строк) — модуль с функциями `parse_srt`, `rebucket`, `format_srt`, `download_subtitles`, `main`. CLI-точка входа.
-- `.claude/skills/konspekt-preview/tests/test_youtube_to_srt.py` (~80 строк) — юнит-тесты на парсинг и переразбивку.
-- `.claude/skills/konspekt-preview/tests/__init__.py` (пустой) — чтобы pytest подхватил пакет.
+- `.claude/skills/konspekt/preview.md` (~250 строк) — самодостаточная методология режима: вводный блок «забудь правила мастер-MD», обработка входов, шаблон обзора, правила сохранения, граничные случаи, дисциплина.
+- `.claude/skills/konspekt/youtube_to_srt.py` (~120 строк) — `parse_srt`, `rebucket`, `format_srt`, `download_subtitles`, `main`.
+- `.claude/skills/konspekt/tests/test_youtube_to_srt.py` (~80 строк) — юнит-тесты.
 
 **Модифицируются:**
 
-- `CLAUDE.md` — добавить одну строку про новый скилл и убрать TODO про карту смыслов в .md (если он уже неактуален; проверить по факту).
+- `.claude/skills/konspekt/SKILL.md` — две короткие правки (строка в «Команды пользователя» + диспетчерский блок в конце).
+- `CLAUDE.md` (корень проекта) — упомянуть новый режим `preview` одной строкой.
+
+**Не трогаются:**
+
+- `profile_*.md`, `layer2_widget.md`, `layer3_recon.md`, `md_parser.py`, `widget_generator.py`, `validate_widget.py`, существующие тесты в `tests/` — работа режимов `master` и `widget` остаётся без изменений.
 
 ---
 
-## Task 1: Структура скилла и минимальный SKILL.md
+## Task 1: SKILL.md — добавить точки входа для режима `preview`
 
 **Files:**
-- Create: `.claude/skills/konspekt-preview/SKILL.md`
+- Modify: `.claude/skills/konspekt/SKILL.md`
 
-- [ ] **Step 1: Создать директорию и минимальный SKILL.md с frontmatter**
+- [ ] **Step 1: Добавить строку в раздел «Команды пользователя»**
 
-Создать файл `.claude/skills/konspekt-preview/SKILL.md` с содержимым:
+Найти в `SKILL.md` блок:
 
 ```markdown
+## Команды пользователя
+
+- `/konspekt` + транскрипт → мастер-MD.
+- `/konspekt — сделай виджет из <файл>` → виджет: Слой 2 + Слой 3 одним процессом (см. `layer2_widget.md`, затем `layer3_recon.md`).
+```
+
+Дописать третью строку:
+
+```markdown
+- `/konspekt preview <путь или YouTube-URL>` → предварительный обзор видео (см. `preview.md`).
+```
+
+- [ ] **Step 2: Добавить диспетчерский блок в конец SKILL.md**
+
+Найти в самом конце `SKILL.md` блок «Виджет (Слой 2 + Слой 3)». **После него** добавить:
+
+````markdown
 ---
-name: konspekt-preview
-description: Предварительная оценка видео — связный нарративный обзор ~800–950 слов по сырому транскрипту (локальный файл или YouTube-ссылка). Без сопроводилок и серийного контекста. Дешёвое «первое касание» перед решением запускать /konspekt.
+
+## Режим `preview`
+
+Когда пользователь пишет `/konspekt preview <путь или YouTube-URL>` — это **отдельный режим**, не часть пайплайна мастер-MD.
+
+**Алгоритм:**
+
+1. Прочитать `preview.md`.
+2. Дальше действовать **только по `preview.md`**, игнорируя всё остальное в этом SKILL.md (правила сегментации, шаблон сегмента, ToV, три уровня И/М/Д, самопроверку — это правила режима `master`, к обзору они не применяются).
+
+`preview.md` самодостаточный — содержит весь шаблон обзора, дисциплину, граничные случаи, инструкцию по работе с YouTube.
+
+**Связь с режимом `master`:** односторонняя через **рекомендацию** в финальном разделе обзора. Автоматический переход в `master` не делается — пользователь вызывает `/konspekt <путь>` отдельной командой.
+````
+
+- [ ] **Step 3: Проверить, что текущие правила скилла не нарушены**
+
+Run: `git diff .claude/skills/konspekt/SKILL.md`
+
+Expected: только добавления (одна строка в «Команды» + новый раздел в конце). Никаких изменений в существующих разделах про сегментацию, шаблон, голос.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .claude/skills/konspekt/SKILL.md
+git commit -m "feat(preview): зарегистрировать режим preview в SKILL.md /konspekt"
+```
+
 ---
 
-# Скилл: /konspekt-preview
+## Task 2: preview.md — каркас, изоляция от мастер-MD, входы
 
-Один проход Claude: транскрипт → связный обзор ~800–950 слов.
+**Files:**
+- Create: `.claude/skills/konspekt/preview.md`
 
-## Файлы скилла
+- [ ] **Step 1: Создать `preview.md` с шапкой, изоляцией и ШАГ 0**
 
-- `SKILL.md` — этот файл (методология + формат + шаблон).
-- `youtube_to_srt.py` — скачивание субтитров с YouTube и переразбивка в 30-секундные блоки.
-- `tests/test_youtube_to_srt.py` — юнит-тесты.
+Создать `.claude/skills/konspekt/preview.md`:
+
+````markdown
+# Режим `/konspekt preview` — предварительная оценка видео
+
+## ВАЖНО: изоляция от правил мастер-MD
+
+Этот файл — **самодостаточная инструкция режима `preview`**. Когда работаешь в этом режиме, **забудь всё, что написано в `SKILL.md` про сегментацию, шаблон сегмента, голос ToV, три уровня (И)/(М)/(Д), самопроверку, профили (`profile_*.md`), серийный контекст**. К обзору эти правила не применяются — это другой жанр.
+
+Применяй только то, что написано **здесь**, в `preview.md`.
+
+---
 
 ## Когда вызывается
 
-- `/konspekt-preview <путь к транскрипту>` — локальный `.srt`/`.vtt`/`.txt`/`.md`.
-- `/konspekt-preview <YouTube-ссылка>` — `https://www.youtube.com/watch?v=...` или `https://youtu.be/...`.
-- `/konspekt-preview` без аргумента — спросить путь или ссылку.
-
----
-```
-
-- [ ] **Step 2: Проверить, что директория создана**
-
-Run: `ls .claude/skills/konspekt-preview/`
-Expected: видеть `SKILL.md`.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "feat(preview): создать каркас скилла /konspekt-preview"
-```
+- `/konspekt preview <путь к транскрипту>` — локальный `.srt`/`.vtt`/`.txt`/`.md`.
+- `/konspekt preview <YouTube-URL>` — `https://www.youtube.com/watch?v=...` или `https://youtu.be/...`.
+- `/konspekt preview` без аргумента — спросить путь или ссылку.
 
 ---
 
-## Task 2: SKILL.md — ШАГ 0. Получение транскрипта
-
-**Files:**
-- Modify: `.claude/skills/konspekt-preview/SKILL.md`
-
-- [ ] **Step 1: Добавить раздел про входы и YouTube**
-
-Дописать в `SKILL.md` после раздела «Когда вызывается»:
-
-````markdown
 ## ШАГ 0. Получение транскрипта
 
 ### 0.1. Локальный файл
@@ -102,7 +136,7 @@ git commit -m "feat(preview): создать каркас скилла /konspekt
 1. Запустить `youtube_to_srt.py` через Bash:
 
    ```bash
-   python .claude/skills/konspekt-preview/youtube_to_srt.py "<URL>" transcripts/
+   python .claude/skills/konspekt/youtube_to_srt.py "<URL>" transcripts/
    ```
 
 2. Скрипт пытается скачать **ручные субтитры** на оригинальном языке. Если их нет — берёт **авто-генерированные**. Если нет ни ручных, ни авто — выходит с кодом 2 и сообщением: «У этого видео нет субтитров».
@@ -127,20 +161,20 @@ git commit -m "feat(preview): создать каркас скилла /konspekt
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "feat(preview): SKILL.md — ШАГ 0 (получение транскрипта, YouTube)"
+git add .claude/skills/konspekt/preview.md
+git commit -m "feat(preview): preview.md — каркас, изоляция, ШАГ 0 (входы, YouTube)"
 ```
 
 ---
 
-## Task 3: SKILL.md — ШАГ 1. Чтение и оценка
+## Task 3: preview.md — ШАГ 1. Чтение и оценка
 
 **Files:**
-- Modify: `.claude/skills/konspekt-preview/SKILL.md`
+- Modify: `.claude/skills/konspekt/preview.md`
 
 - [ ] **Step 1: Дописать ШАГ 1**
 
-Дописать в `SKILL.md` после ШАГ 0:
+Дописать в `preview.md` после ШАГ 0:
 
 ````markdown
 ## ШАГ 1. Чтение и оценка
@@ -163,20 +197,20 @@ git commit -m "feat(preview): SKILL.md — ШАГ 0 (получение тран
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценка)"
+git add .claude/skills/konspekt/preview.md
+git commit -m "feat(preview): preview.md — ШАГ 1 (чтение и оценка)"
 ```
 
 ---
 
-## Task 4: SKILL.md — ШАГ 2. Формат и шаблон обзора
+## Task 4: preview.md — ШАГ 2. Формат и шаблон обзора
 
 **Files:**
-- Modify: `.claude/skills/konspekt-preview/SKILL.md`
+- Modify: `.claude/skills/konspekt/preview.md`
 
-- [ ] **Step 1: Дописать принципы формы**
+- [ ] **Step 1: Дописать принципы формы и шаблон**
 
-Дописать в `SKILL.md` после ШАГ 1:
+Дописать в `preview.md` после ШАГ 1:
 
 ````markdown
 ## ШАГ 2. Написание обзора
@@ -185,9 +219,9 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 
 - **Связный нарративный рассказ**, не маркерные блоки. Раздел течёт абзацами, списки — только в трёх специальных местах (см. 2.2).
 - **Объём ~800–950 слов.** Читается за ~5 минут. Меньше — теряется содержательность; больше — обзор перестаёт быть «первым касанием».
-- **Голос спокойного знающего коллеги.** Без академического дистанцирования, без рекламной интонации, без панибратства. Близко к голосу мастер-MD `/konspekt`.
+- **Голос спокойного знающего коллеги.** Без академического дистанцирования, без рекламной интонации, без панибратства. Близко по тону к мастер-MD из режима `master`, но без его структурных элементов.
 - **Простой язык.** Без «риторической дуги», «фундамента, который держит», «глубинного зачем». Тест: прочитать вслух — звучит как нормальная речь?
-- **Жирное** — сжатые формулировки ключевых мыслей абзацев. По тем же правилам, что в `/konspekt`. Тест: прочитать только жирное сверху вниз — складывается ли канва смыслов?
+- **Жирное** — сжатые формулировки ключевых мыслей абзацев. Тест: прочитать только жирное сверху вниз — складывается ли канва смыслов?
 - **Тон описательный, не оценочный.** Не «отличное видео», а «методология стройная, артефактов много». Не «слабая часть», а «много общих слов, конкретики мало».
 - **Без ASCII-схем, Mermaid, Unicode-полосок, шапок-карточек в `code-fence`.** Эти приёмы проверены в пилотировании — утяжеляют восприятие, ломают поток.
 
@@ -219,8 +253,7 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 
 [2–4 абзаца. Сквозная тема, риторическая позиция автора, главная мысль одной
 фразой. Если у автора есть отчётливая методология — она перечисляется
-маркированным списком из 3–5 пунктов внутри этого раздела (список даёт
-«остров» для глаза, не ломая поток).]
+маркированным списком из 3–5 пунктов внутри этого раздела.]
 
 ---
 
@@ -236,8 +269,7 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 ## На вынос
 
 [1 строка-зацепка + маркированный список из 4–6 конкретных артефактов,
-которые можно взять и применить. Каждый пункт — с жирным заголовком и
-коротким пояснением: `- **Артефакт:** что это и где применить`.]
+которые можно взять и применить: `- **Артефакт:** что это и где применить`.]
 
 ---
 
@@ -254,7 +286,7 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 | --- | --- | --- |
 | 00:00 – HH:MM | [описание участка] | смотреть / по интересу / проматывать / пропускать |
 
-[Таблица 3–5 строк. Колонка «Решение» — из ограниченного словаря выше.
+[Таблица 3–5 строк. Колонка «Решение» — только из словаря выше.
 Если транскрипт без таймингов — раздел заменяется на абзац словами
 («первая треть — то-то; ядро в середине; концовка — Q&A»).]
 
@@ -277,7 +309,8 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 - Имена участников чата / Q&A — описывать без имён («один из участников спрашивает», «в чате уточняют»).
 - Личные впечатления агента («мне понравилось», «я считаю»).
 - Оценочные эпитеты («отличное», «гениальное», «слабое»).
-- Автоматический вызов `/konspekt` — даже если рекомендация «делать полный мастер-MD». Решение запуска — за пользователем.
+- **Элементы шаблона мастер-MD** (`## Сегмент N`, `### Карта`, `### Текст`, `**Ключевая мысль:**`, `> **Принцип:**`, `> **Методология:**` и т.п.) — это другой жанр, в обзоре их быть не должно.
+- Автоматический переход в режим `master` — даже если рекомендация «делать полный мастер-MD». Решение запуска — за пользователем.
 
 ### 2.4. Раздел «Где смотреть» — отдельно
 
@@ -289,20 +322,20 @@ git commit -m "feat(preview): SKILL.md — ШАГ 1 (чтение и оценк�
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "feat(preview): SKILL.md — ШАГ 2 (формат, шаблон, что не должно быть)"
+git add .claude/skills/konspekt/preview.md
+git commit -m "feat(preview): preview.md — ШАГ 2 (формат, шаблон, что не должно быть)"
 ```
 
 ---
 
-## Task 5: SKILL.md — ШАГ 3, граничные случаи, дисциплина
+## Task 5: preview.md — ШАГ 3, граничные случаи, дисциплина
 
 **Files:**
-- Modify: `.claude/skills/konspekt-preview/SKILL.md`
+- Modify: `.claude/skills/konspekt/preview.md`
 
 - [ ] **Step 1: Дописать оставшиеся разделы**
 
-Дописать в `SKILL.md` после ШАГ 2:
+Дописать в `preview.md` после ШАГ 2:
 
 ````markdown
 ## ШАГ 3. Сохранение
@@ -311,7 +344,7 @@ git commit -m "feat(preview): SKILL.md — ШАГ 2 (формат, шаблон,
 
 ### Куда
 
-- Если транскрипт лежит в **рабочей папке урока** (например, `F:/.../М3-Д4.../SRC_*.srt`) — обзор сохранять **рядом** как `OUT_<название>_обзор.md`. Симметрично с тем, как `/konspekt` сохраняет `OUT_<название>_мастер.md`.
+- Если транскрипт лежит в **рабочей папке урока** (например, `F:/.../М3-Д4.../SRC_*.srt`) — обзор сохранять **рядом** как `OUT_<название>_обзор.md`. Симметрично с тем, как режим `master` сохраняет `OUT_<название>_мастер.md`.
 - Если транскрипт лежит в `transcripts/` проекта — обзор сохранять туда же как `<название>_обзор.md`.
 - Для YouTube-входа транскрипт изначально лежит в `transcripts/`, поэтому обзор тоже идёт туда.
 
@@ -337,56 +370,42 @@ git commit -m "feat(preview): SKILL.md — ШАГ 2 (формат, шаблон,
 - **Транскрипт > 30 000 токенов** → попросить разрезать на источнике, обработать по частям.
 - **Нет таймстампов** (`.txt`/`.md`) → раздел «Где смотреть» становится словесным абзацем; длительность оценить по объёму.
 - **Очень короткий транскрипт** (< 5 минут полезного потока) → обзор сжать до 300–500 слов, разделы «Что это» и «О чём по сути» можно слить.
-- **Несколько спикеров** → описать кратко («двое ведут разговор», «панельная дискуссия из четырёх»); имена не персонифицировать, если это не критично для смысла.
+- **Несколько спикеров** → описать кратко («двое ведут разговор», «панельная дискуссия из четырёх»); имена не персонифицировать.
 - **Транскрипт явно мусорный** (битый, не транскрипт, машинный перевод низкого качества) — коротко сообщить о проблеме и спросить пользователя, продолжать ли. Не писать обзор поверх мусора.
-- **YouTube-видео без субтитров** → отказать с инструкцией (см. 0.2).
+- **YouTube-видео без субтитров** → отказать с инструкцией (см. ШАГ 0.2).
 - **YouTube-видео > 2 часов** → транскрипт скачается, но потом попросить разрезать.
 
 ---
 
-## Стыковка с другими скиллами
-
-- **`/konspekt`** — независимый. `/konspekt-preview` в разделе «Рекомендация» **явно указывает**, нужен ли последующий `/konspekt`, но автоматически не запускает. Пользователь вызывает отдельно.
-- **`/digest`** — другая задача (оценка через wiki). Оба скилла могут вызываться на одном источнике в любом порядке.
-
----
-
-## Дисциплина
+## Дисциплина (важно — не зависит от чтения SKILL.md)
 
 - **Не использовать `TodoWrite`** — пайплайн линейный, прогресс виден из текста сообщений.
 - **Не запускать субагентов и deferred tools.**
-- **Не читать** `profile_*.md`, серийный контекст, сопроводилки, `tov_<серия>.md`, wiki. Это намеренная дешевизна первого касания.
-- **Не предлагать улучшения транскрипта** (groom, чистку шумов распознавания) — у обзора своя задача.
-- **Не вызывать `/konspekt` автоматически.**
+- **Не читать** `profile_*.md`, серийный контекст (`*_мастер.md`), сопроводилки (`.pptx`, презентации, скрины), `tov_<серия>.md`, wiki. Это намеренная дешевизна первого касания.
+- **Не предлагать улучшения транскрипта** (`/groom`, чистка шумов распознавания) — у обзора своя задача.
+- **Не применять правила мастер-MD** из `SKILL.md`: ни сегментации, ни шаблона сегмента, ни голоса ToV-через-сегменты, ни самопроверки. Обзор — другой жанр.
+- **Не вызывать режим `master` автоматически.**
 ````
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "feat(preview): SKILL.md — ШАГ 3, граничные случаи, стыковка, дисциплина"
+git add .claude/skills/konspekt/preview.md
+git commit -m "feat(preview): preview.md — ШАГ 3, граничные случаи, дисциплина"
 ```
 
 ---
 
-## Task 6: Python — тесты на `parse_srt`
+## Task 6: Python — тесты на `parse_srt` (Claude пишет тесты)
 
 **Files:**
-- Create: `.claude/skills/konspekt-preview/tests/__init__.py`
-- Create: `.claude/skills/konspekt-preview/tests/test_youtube_to_srt.py`
+- Create: `.claude/skills/konspekt/tests/test_youtube_to_srt.py`
 
-- [ ] **Step 1: Создать пустой `__init__.py`**
+- [ ] **Step 1: Написать тесты на `parse_srt`**
 
-```bash
-mkdir -p .claude/skills/konspekt-preview/tests
-echo. > .claude/skills/konspekt-preview/tests/__init__.py
-```
+(Файл `tests/__init__.py` уже существует в проекте — не создавать заново.)
 
-(PowerShell: `New-Item -ItemType Directory -Force .claude/skills/konspekt-preview/tests; New-Item -ItemType File .claude/skills/konspekt-preview/tests/__init__.py`)
-
-- [ ] **Step 2: Написать тесты на `parse_srt`**
-
-Создать `.claude/skills/konspekt-preview/tests/test_youtube_to_srt.py`:
+Создать `.claude/skills/konspekt/tests/test_youtube_to_srt.py`:
 
 ```python
 """Тесты для youtube_to_srt.py."""
@@ -440,128 +459,114 @@ def test_parse_srt_trailing_whitespace():
     assert result[0]['text'] == 'Текст'
 ```
 
-- [ ] **Step 3: Запустить тесты — должны упасть (нет реализации)**
+- [ ] **Step 2: Запустить тесты — должны упасть (нет реализации)**
 
 Run:
 
 ```bash
-cd .claude/skills/konspekt-preview && python -m pytest tests/ -v
+cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v
 ```
 
 Expected: `ImportError` или `ModuleNotFoundError` на `from youtube_to_srt import ...`.
 
----
+- [ ] **Step 3: Commit**
 
-## Task 7: Python — реализация `parse_srt` + `format_srt`
-
-**Files:**
-- Create: `.claude/skills/konspekt-preview/youtube_to_srt.py`
-
-- [ ] **Step 1: Создать модуль с `parse_srt` и `format_srt`**
-
-Создать `.claude/skills/konspekt-preview/youtube_to_srt.py`:
-
-```python
-"""Скачивание субтитров с YouTube и переразбивка SRT на 30-секундные блоки.
-
-CLI: python youtube_to_srt.py <youtube_url> <output_dir>
-"""
-
-import re
-import subprocess
-import sys
-from pathlib import Path
-
-BLOCK_SECONDS = 30
-TIMESTAMP_RE = re.compile(
-    r'(\d{2}):(\d{2}):(\d{2})[,\.](\d{3})\s*-->\s*'
-    r'(\d{2}):(\d{2}):(\d{2})[,\.](\d{3})'
-)
-
-
-def _ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
-    return (int(h) * 3600 + int(m) * 60 + int(s)) * 1000 + int(ms)
-
-
-def _ms_to_ts(ms: int) -> str:
-    h, ms = divmod(ms, 3600_000)
-    m, ms = divmod(ms, 60_000)
-    s, ms = divmod(ms, 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-
-def parse_srt(content: str) -> list[dict]:
-    """Парсит SRT-строку в список сегментов.
-
-    Каждый сегмент: {'index': int, 'start_ms': int, 'end_ms': int, 'text': str}.
-    """
-    segments = []
-    blocks = re.split(r'\n\s*\n', content.strip())
-    for block in blocks:
-        if not block.strip():
-            continue
-        lines = block.strip().split('\n')
-        if len(lines) < 2:
-            continue
-        # lines[0] — индекс (может быть отсутствует или нечисловой — терпим)
-        try:
-            index = int(lines[0])
-            ts_line = lines[1]
-            text_lines = lines[2:]
-        except ValueError:
-            index = len(segments) + 1
-            ts_line = lines[0]
-            text_lines = lines[1:]
-        m = TIMESTAMP_RE.search(ts_line)
-        if not m:
-            continue
-        start_ms = _ts_to_ms(*m.group(1, 2, 3, 4))
-        end_ms = _ts_to_ms(*m.group(5, 6, 7, 8))
-        text = ' '.join(line.strip() for line in text_lines if line.strip())
-        segments.append({
-            'index': index,
-            'start_ms': start_ms,
-            'end_ms': end_ms,
-            'text': text,
-        })
-    return segments
-
-
-def format_srt(segments: list[dict]) -> str:
-    """Сериализует список сегментов обратно в SRT."""
-    parts = []
-    for i, seg in enumerate(segments, 1):
-        parts.append(
-            f"{i}\n"
-            f"{_ms_to_ts(seg['start_ms'])} --> {_ms_to_ts(seg['end_ms'])}\n"
-            f"{seg['text']}\n"
-        )
-    return '\n'.join(parts)
+```bash
+git add .claude/skills/konspekt/tests/test_youtube_to_srt.py
+git commit -m "test(preview): тесты parse_srt для youtube_to_srt"
 ```
 
-- [ ] **Step 2: Запустить тесты на `parse_srt`**
+---
+
+## Task 7: Python — реализация `parse_srt` + `format_srt` через `codex exec`
+
+**Files:**
+- Create: `.claude/skills/konspekt/youtube_to_srt.py`
+
+**Подход:** делегировать написание кода codex'у с готовыми тестами как контрактом. Claude формулирует промпт + ревьюит результат.
+
+- [ ] **Step 1: Подготовить промпт для codex**
+
+Создать временный файл `_codex_prompt_parse_srt.txt`:
+
+```text
+Создай Python-файл .claude/skills/konspekt/youtube_to_srt.py со следующим содержимым в начале:
+
+1. Docstring модуля:
+   "Скачивание субтитров с YouTube и переразбивка SRT на 30-секундные блоки.
+    CLI: python youtube_to_srt.py <youtube_url> <output_dir>"
+
+2. Импорты: re, subprocess, sys, from pathlib import Path
+
+3. Константа BLOCK_SECONDS = 30
+
+4. Регулярка TIMESTAMP_RE для матчинга SRT-таймстампов вида HH:MM:SS,mmm --> HH:MM:SS,mmm
+   (с поддержкой как запятой, так и точки как разделителя миллисекунд).
+
+5. Внутренние хелперы:
+   - _ts_to_ms(h, m, s, ms) -> int  — конвертит части таймстампа в миллисекунды
+   - _ms_to_ts(ms) -> str — обратно в "HH:MM:SS,mmm"
+
+6. parse_srt(content: str) -> list[dict]
+   — парсит SRT-строку в список сегментов
+   — каждый сегмент: {'index': int, 'start_ms': int, 'end_ms': int, 'text': str}
+   — text — это строки текста, склеенные через пробел (без переноса)
+   — пустые блоки игнорируются
+   — если первая строка блока не число, считает её таймстамп-строкой
+
+7. format_srt(segments: list[dict]) -> str
+   — сериализует обратно в SRT-формат
+   — индексы перенумеровываются с 1
+   — формат: "{i}\n{HH:MM:SS,mmm} --> {HH:MM:SS,mmm}\n{text}\n"
+   — блоки разделяются пустой строкой
+
+Контракт задают тесты в .claude/skills/konspekt/tests/test_youtube_to_srt.py — прочитай их (особенно тесты с префиксом test_parse_srt_), реализация должна проходить все. Функцию rebucket пока не реализовывай — она будет в следующем шаге.
+```
+
+- [ ] **Step 2: Запустить codex exec**
+
+Run (PowerShell):
+
+```powershell
+Get-Content _codex_prompt_parse_srt.txt | codex exec --ephemeral
+```
+
+(Точные флаги — в `vibecoding vault/knowledge/codex-as-subagent.md`. На Bash: `cat _codex_prompt_parse_srt.txt | codex exec --ephemeral`. Если codex просит расположение для вывода — указать `.claude/skills/konspekt/youtube_to_srt.py`.)
+
+- [ ] **Step 3: Ревью результата**
+
+Прочитать `.claude/skills/konspekt/youtube_to_srt.py`. Проверить:
+
+- Импорты, BLOCK_SECONDS, TIMESTAMP_RE, _ts_to_ms, _ms_to_ts, parse_srt, format_srt — все на месте.
+- Стиль соответствует существующему `md_parser.py` (4 пробела, snake_case, type hints).
+- Никаких лишних функций (нет преждевременного `rebucket`, `download_subtitles` — они в следующих задачах).
+
+Если что-то не так — поправить руками или перезапустить codex с уточнённым промптом.
+
+- [ ] **Step 4: Запустить тесты на `parse_srt`**
 
 Run:
 
 ```bash
-cd .claude/skills/konspekt-preview && python -m pytest tests/test_youtube_to_srt.py -v -k parse_srt
+cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v -k parse_srt
 ```
 
-Expected: 5 PASS, 0 FAIL. (`rebucket` ещё не реализован — пока не вызывается.)
+Expected: 5 PASS, 0 FAIL.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Удалить временный файл и закоммитить**
 
 ```bash
-git add .claude/skills/konspekt-preview/youtube_to_srt.py .claude/skills/konspekt-preview/tests/
-git commit -m "feat(preview): parse_srt + format_srt с юнит-тестами"
+rm _codex_prompt_parse_srt.txt
+git add .claude/skills/konspekt/youtube_to_srt.py
+git commit -m "feat(preview): parse_srt + format_srt (codex implementation)"
 ```
 
 ---
 
-## Task 8: Python — тесты на `rebucket`
+## Task 8: Python — тесты на `rebucket` (Claude пишет тесты)
 
 **Files:**
-- Modify: `.claude/skills/konspekt-preview/tests/test_youtube_to_srt.py`
+- Modify: `.claude/skills/konspekt/tests/test_youtube_to_srt.py`
 
 - [ ] **Step 1: Дописать тесты на `rebucket`**
 
@@ -601,12 +606,12 @@ def test_rebucket_single_segment_under_block():
     result = rebucket(segments, block_seconds=30)
     assert len(result) == 1
     assert result[0]['start_ms'] == 0
-    assert result[0]['end_ms'] == 5000  # end_ms не растягиваем за пределы реального конца
+    assert result[0]['end_ms'] == 5000
     assert result[0]['text'] == 'короткий'
 
 
 def test_rebucket_segment_longer_than_block():
-    """Сегмент длиннее блока (например, музыкальная пауза) — оставить как есть, в своём блоке."""
+    """Сегмент длиннее блока — оставить в своём блоке как есть."""
     segments = [_seg(0, 45000, 'длинный')]
     result = rebucket(segments, block_seconds=30)
     assert len(result) == 1
@@ -629,241 +634,206 @@ def test_rebucket_preserves_index_renumber():
     assert [s['index'] for s in result] == [1, 2, 3]
 ```
 
-- [ ] **Step 2: Запустить тесты — должны упасть на `rebucket`**
+- [ ] **Step 2: Запустить тесты — `rebucket` должен упасть на `ImportError`**
 
 Run:
 
 ```bash
-cd .claude/skills/konspekt-preview && python -m pytest tests/test_youtube_to_srt.py -v -k rebucket
+cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v -k rebucket
 ```
 
-Expected: `ImportError` на `from youtube_to_srt import ... rebucket ...` (rebucket ещё не определён).
-
----
-
-## Task 9: Python — реализация `rebucket`
-
-**Files:**
-- Modify: `.claude/skills/konspekt-preview/youtube_to_srt.py`
-
-- [ ] **Step 1: Дописать `rebucket` в `youtube_to_srt.py`**
-
-Дописать в `youtube_to_srt.py` после `format_srt`:
-
-```python
-
-
-def rebucket(segments: list[dict], block_seconds: int = BLOCK_SECONDS) -> list[dict]:
-    """Склеивает короткие сегменты в блоки по N секунд.
-
-    Правила:
-    - Каждый блок длится максимум N секунд, начинается на границе N (0, N, 2N, ...).
-    - Сегменты, начавшиеся в пределах блока, добавляются в него — даже если перетекают
-      за границу.
-    - Сегмент длиннее N секунд оставляется в своём блоке как есть.
-    - Индексы перенумеровываются с 1.
-    """
-    if not segments:
-        return []
-
-    block_ms = block_seconds * 1000
-    blocks: list[dict] = []
-    current: dict | None = None
-    current_boundary = 0
-
-    for seg in segments:
-        seg_boundary = (seg['start_ms'] // block_ms) * block_ms
-        if current is None or seg_boundary != current_boundary:
-            if current is not None:
-                blocks.append(current)
-            current_boundary = seg_boundary
-            current = {
-                'index': 0,
-                'start_ms': seg_boundary,
-                'end_ms': seg['end_ms'],
-                'text': seg['text'],
-            }
-        else:
-            current['end_ms'] = seg['end_ms']
-            current['text'] = (current['text'] + ' ' + seg['text']).strip()
-
-    if current is not None:
-        blocks.append(current)
-
-    for i, b in enumerate(blocks, 1):
-        b['index'] = i
-
-    return blocks
-```
-
-- [ ] **Step 2: Запустить тесты — все должны пройти**
-
-Run:
-
-```bash
-cd .claude/skills/konspekt-preview && python -m pytest tests/test_youtube_to_srt.py -v
-```
-
-Expected: все ~10 тестов PASS.
+Expected: `ImportError` на `from youtube_to_srt import ... rebucket ...`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add .claude/skills/konspekt-preview/youtube_to_srt.py .claude/skills/konspekt-preview/tests/test_youtube_to_srt.py
-git commit -m "feat(preview): rebucket для переразбивки SRT в 30-сек блоки"
+git add .claude/skills/konspekt/tests/test_youtube_to_srt.py
+git commit -m "test(preview): тесты rebucket для youtube_to_srt"
 ```
 
 ---
 
-## Task 10: Python — `download_subtitles` и CLI
+## Task 9: Python — реализация `rebucket` через `codex exec`
 
 **Files:**
-- Modify: `.claude/skills/konspekt-preview/youtube_to_srt.py`
+- Modify: `.claude/skills/konspekt/youtube_to_srt.py`
 
-- [ ] **Step 1: Дописать `download_subtitles` и `main`**
+- [ ] **Step 1: Подготовить промпт для codex**
 
-Дописать в `youtube_to_srt.py` после `rebucket`:
+Создать `_codex_prompt_rebucket.txt`:
 
-```python
+```text
+В файл .claude/skills/konspekt/youtube_to_srt.py добавь функцию rebucket после format_srt:
 
+rebucket(segments: list[dict], block_seconds: int = BLOCK_SECONDS) -> list[dict]
+  — склеивает короткие сегменты в блоки по N секунд
 
-def _slugify(title: str) -> str:
-    """Превращает заголовок YouTube в безопасное имя файла."""
-    slug = re.sub(r'[^\w\s\-]', '', title, flags=re.UNICODE)
-    slug = re.sub(r'\s+', '_', slug.strip())
-    return slug[:80] or 'youtube_video'
+Правила:
+- Каждый блок имеет фиксированную границу start_ms = floor(seg.start_ms / block_ms) * block_ms.
+- Сегмент идёт в блок, в котором он начался (по start_ms).
+- Если несколько сегментов попали в один блок — их text склеивается через пробел, end_ms блока = end_ms последнего сегмента в нём.
+- Если сегмент длиннее block_seconds — оставляется в своём блоке как есть, end_ms блока = его реальный end_ms.
+- Индексы выходного списка перенумеровываются с 1.
+- На пустом входе вернуть [].
 
+Контракт — тесты test_rebucket_* в .claude/skills/konspekt/tests/test_youtube_to_srt.py. Прочитай их и реализуй так, чтобы все проходили.
 
-def _get_video_title(url: str) -> str:
-    """Получает заголовок видео через yt-dlp."""
-    result = subprocess.run(
-        ['yt-dlp', '--get-title', '--no-warnings', url],
-        capture_output=True, text=True, encoding='utf-8',
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f'yt-dlp --get-title failed: {result.stderr}')
-    return result.stdout.strip()
-
-
-def download_subtitles(url: str, output_dir: Path) -> Path:
-    """Скачивает субтитры с YouTube и возвращает путь к SRT-файлу.
-
-    Сначала пробует ручные на оригинальном языке, потом авто. Если нет ни тех,
-    ни других — вызывает SystemExit с кодом 2.
-    """
-    title = _get_video_title(url)
-    slug = _slugify(title)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    tmp_template = str(output_dir / f'_tmp_{slug}.%(ext)s')
-
-    # 1. Сначала ручные субтитры на оригинальном языке.
-    result = subprocess.run(
-        ['yt-dlp', '--write-subs', '--sub-langs', 'orig',
-         '--sub-format', 'srt', '--skip-download', '--no-warnings',
-         '-o', tmp_template, url],
-        capture_output=True, text=True, encoding='utf-8',
-    )
-    srt_files = list(output_dir.glob(f'_tmp_{slug}*.srt'))
-
-    # 2. Если не нашли — пробуем авто-генерированные.
-    if not srt_files:
-        result = subprocess.run(
-            ['yt-dlp', '--write-auto-subs', '--sub-langs', 'orig',
-             '--sub-format', 'srt', '--skip-download', '--no-warnings',
-             '-o', tmp_template, url],
-            capture_output=True, text=True, encoding='utf-8',
-        )
-        srt_files = list(output_dir.glob(f'_tmp_{slug}*.srt'))
-
-    if not srt_files:
-        print('ERROR: У этого видео нет субтитров (ни ручных, ни авто).',
-              file=sys.stderr)
-        sys.exit(2)
-
-    tmp_srt = srt_files[0]
-
-    # Переразбиваем в 30-секундные блоки.
-    content = tmp_srt.read_text(encoding='utf-8')
-    segments = parse_srt(content)
-    rebucketed = rebucket(segments)
-    rebucketed_srt = format_srt(rebucketed)
-
-    # Финальное имя с префиксом SRC_transcript_, с защитой от перезаписи.
-    base_name = f'SRC_transcript_{slug}'
-    final_path = output_dir / f'{base_name}.srt'
-    suffix_n = 2
-    while final_path.exists():
-        final_path = output_dir / f'{base_name}_v{suffix_n}.srt'
-        suffix_n += 1
-
-    final_path.write_text(rebucketed_srt, encoding='utf-8')
-
-    # Удалить временный файл.
-    tmp_srt.unlink()
-
-    return final_path
-
-
-def main():
-    if len(sys.argv) != 3:
-        print('Usage: youtube_to_srt.py <youtube_url> <output_dir>',
-              file=sys.stderr)
-        sys.exit(1)
-    url, output_dir = sys.argv[1], Path(sys.argv[2])
-    final_path = download_subtitles(url, output_dir)
-    print(str(final_path))
-
-
-if __name__ == '__main__':
-    main()
+Не трогай существующий код (parse_srt, format_srt) и не добавляй других функций.
 ```
 
-- [ ] **Step 2: Прогнать существующие тесты — ничего не сломалось**
+- [ ] **Step 2: Запустить codex exec**
+
+Run:
+
+```powershell
+Get-Content _codex_prompt_rebucket.txt | codex exec --ephemeral
+```
+
+- [ ] **Step 3: Ревью результата**
+
+Прочитать обновлённый `youtube_to_srt.py`. Проверить:
+
+- Функция `rebucket` появилась после `format_srt`.
+- Старый код `parse_srt`, `format_srt`, хелперы — без изменений.
+- Логика соответствует описанию: блоки по `floor(start_ms / block_ms)`, склейка текста через пробел, индексы с 1.
+
+- [ ] **Step 4: Запустить все тесты — должны пройти**
 
 Run:
 
 ```bash
-cd .claude/skills/konspekt-preview && python -m pytest tests/test_youtube_to_srt.py -v
+cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v
 ```
 
 Expected: все ~10 тестов PASS.
 
-- [ ] **Step 3: Smoke-тест CLI справки**
-
-Run:
+- [ ] **Step 5: Удалить временный файл и закоммитить**
 
 ```bash
-python .claude/skills/konspekt-preview/youtube_to_srt.py
-```
-
-Expected: на stderr `Usage: youtube_to_srt.py <youtube_url> <output_dir>`, exit code 1.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add .claude/skills/konspekt-preview/youtube_to_srt.py
-git commit -m "feat(preview): download_subtitles + CLI для youtube_to_srt"
+rm _codex_prompt_rebucket.txt
+git add .claude/skills/konspekt/youtube_to_srt.py
+git commit -m "feat(preview): rebucket для 30-сек блоков (codex implementation)"
 ```
 
 ---
 
-## Task 11: End-to-end проверка на локальном SRT
+## Task 10: Python — `download_subtitles` и CLI через `codex exec`
+
+**Files:**
+- Modify: `.claude/skills/konspekt/youtube_to_srt.py`
+
+- [ ] **Step 1: Подготовить промпт для codex**
+
+Создать `_codex_prompt_download.txt`:
+
+```text
+В файл .claude/skills/konspekt/youtube_to_srt.py добавь функции после rebucket:
+
+1. _slugify(title: str) -> str
+   — убирает спецсимволы, заменяет пробелы на _, обрезает до 80 символов
+   — поддерживает Unicode (кириллица сохраняется)
+   — если результат пустой — возвращает 'youtube_video'
+
+2. _get_video_title(url: str) -> str
+   — вызывает: yt-dlp --get-title --no-warnings <url>
+   — capture_output=True, text=True, encoding='utf-8'
+   — при returncode != 0 — RuntimeError с stderr в сообщении
+
+3. download_subtitles(url: str, output_dir: Path) -> Path
+   — алгоритм:
+     a) Получить title через _get_video_title, сделать slug через _slugify
+     b) output_dir.mkdir(parents=True, exist_ok=True)
+     c) tmp_template = str(output_dir / f'_tmp_{slug}.%(ext)s')
+     d) Попытка 1: yt-dlp с --write-subs --sub-langs orig --sub-format srt --skip-download --no-warnings -o tmp_template <url>
+        Найти tmp файлы через output_dir.glob(f'_tmp_{slug}*.srt').
+     e) Если ничего не нашли — Попытка 2 с --write-auto-subs вместо --write-subs.
+     f) Если и после этого нет файлов — print('ERROR: У этого видео нет субтитров (ни ручных, ни авто).', file=sys.stderr); sys.exit(2)
+     g) Взять первый найденный tmp_srt
+     h) Прочитать его, прогнать через parse_srt → rebucket → format_srt
+     i) Финальное имя: base_name = f'SRC_transcript_{slug}', final_path = output_dir / f'{base_name}.srt'
+        Если уже есть — добавить суффикс _v2, _v3 и т.д. до свободного имени.
+     j) Записать результат в final_path с encoding='utf-8'
+     k) Удалить tmp_srt
+     l) Вернуть final_path
+
+4. main()
+   — если len(sys.argv) != 3:
+       print('Usage: youtube_to_srt.py <youtube_url> <output_dir>', file=sys.stderr)
+       sys.exit(1)
+   — url, output_dir = sys.argv[1], Path(sys.argv[2])
+   — final_path = download_subtitles(url, output_dir)
+   — print(str(final_path))
+
+5. В конце файла:
+   if __name__ == '__main__':
+       main()
+
+Не трогай существующий код (parse_srt, format_srt, rebucket, хелперы _ts_to_ms, _ms_to_ts).
+```
+
+- [ ] **Step 2: Запустить codex exec**
+
+Run:
+
+```powershell
+Get-Content _codex_prompt_download.txt | codex exec --ephemeral
+```
+
+- [ ] **Step 3: Ревью результата**
+
+Проверить:
+
+- `_slugify`, `_get_video_title`, `download_subtitles`, `main` появились.
+- В вызовах `subprocess.run` используются `capture_output=True`, `text=True`, `encoding='utf-8'`.
+- Алгоритм соответствует промпту (две попытки: ручные → авто; правильные коды выхода).
+- `if __name__ == '__main__': main()` в конце.
+
+- [ ] **Step 4: Прогнать все юнит-тесты — ничего не сломалось**
+
+Run:
+
+```bash
+cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v
+```
+
+Expected: все ~10 тестов PASS (новые функции тестами не покрыты — это интеграция, проверяется в Task 12).
+
+- [ ] **Step 5: Smoke-тест CLI справки**
+
+Run:
+
+```bash
+python .claude/skills/konspekt/youtube_to_srt.py
+```
+
+Expected: на stderr `Usage: youtube_to_srt.py <youtube_url> <output_dir>`, exit code 1.
+
+- [ ] **Step 6: Удалить временный файл и закоммитить**
+
+```bash
+rm _codex_prompt_download.txt
+git add .claude/skills/konspekt/youtube_to_srt.py
+git commit -m "feat(preview): download_subtitles + CLI (codex implementation)"
+```
+
+---
+
+## Task 11: End-to-end проверка на локальном SRT (Claude)
 
 **Files:**
 - Read: `F:/Наш Архив/ИИ/Ледовских/Вайбкодинг/Модуль 3. Спринт по заработку/М3-Д4. Быстрые каналы заработка-2/SRC_Тайминг_Вайбкодинг  М3 Д4  Быстрые каналы заработка_RU.srt`
 
-- [ ] **Step 1: Запустить скилл вручную (новая сессия / Skill tool)**
+- [ ] **Step 1: Запустить режим preview на локальном SRT**
 
 Из новой сессии:
 
-```
-/konspekt-preview F:/Наш Архив/ИИ/Ледовских/Вайбкодинг/Модуль 3. Спринт по заработку/М3-Д4. Быстрые каналы заработка-2/SRC_Тайминг_Вайбкодинг  М3 Д4  Быстрые каналы заработка_RU.srt
+```text
+/konspekt preview F:/Наш Архив/ИИ/Ледовских/Вайбкодинг/Модуль 3. Спринт по заработку/М3-Д4. Быстрые каналы заработка-2/SRC_Тайминг_Вайбкодинг  М3 Д4  Быстрые каналы заработка_RU.srt
 ```
 
-- [ ] **Step 2: Сверить результат с эталонным «вторым пилотом»**
+- [ ] **Step 2: Сверить результат с эталоном «второго пилота»**
 
-Эталон — обзор М3-Д4 из брейнстормиинговой сессии 2026-05-28 (см. историю чата той сессии или этот план):
+Эталон — обзор М3-Д4 из брейнсторминговой сессии 2026-05-28:
 - Длительность: 35 минут (полезного потока ~25)
 - Заголовок про «первые клиенты на вайб-кодинг через знакомых»
 - 7 разделов в правильном порядке
@@ -875,23 +845,25 @@ git commit -m "feat(preview): download_subtitles + CLI для youtube_to_srt"
 - Длительность взята из последнего таймстампа SRT (`00:34:47`), не из речи спикера.
 - Объём 800–950 слов.
 - Нет ASCII-схем, нет жирных шапок-карточек.
+- Нет элементов шаблона мастер-MD (`## Сегмент N`, `### Карта`, `### Текст`, `**Ключевая мысль:**`).
+- Агент не пытался применить правила сегментации или другие правила режима `master`.
 
-- [ ] **Step 3: Если есть расхождения с эталоном — править SKILL.md**
+- [ ] **Step 3: Если есть протечка правил `master` или другие расхождения — править**
 
-Если, например, скилл выдал отчёт другого формата — найти место в `SKILL.md`, где правило сформулировано неточно, и поправить. Запустить заново. Цикл до сходимости с эталоном.
+Самое вероятное место правки — `preview.md`, раздел «ВАЖНО: изоляция от правил мастер-MD». Если протекают конкретные правила (например, агент сделал `## Сегмент N` или применил `**Ключевая мысль:**`) — добавить их явно в раздел 2.3 «Что НЕ должно быть».
 
 - [ ] **Step 4: Commit правок (если были)**
 
 ```bash
-git add .claude/skills/konspekt-preview/SKILL.md
-git commit -m "fix(preview): уточнить SKILL.md после end-to-end теста"
+git add .claude/skills/konspekt/preview.md
+git commit -m "fix(preview): уточнить preview.md после end-to-end теста"
 ```
 
 (Если правок не было — пропустить.)
 
 ---
 
-## Task 12: End-to-end проверка на YouTube-ссылке
+## Task 12: End-to-end проверка на YouTube-ссылке (Claude)
 
 **Files:** —
 
@@ -901,14 +873,12 @@ git commit -m "fix(preview): уточнить SKILL.md после end-to-end т�
 - На русском или английском (для проверки перевода).
 - 10–30 минут (не слишком короткое, не слишком длинное).
 - Есть субтитры (ручные или авто).
-- Желательно не из курса Ледовских (чтобы избежать дублирования с локальными транскриптами).
+- Желательно не из курса Ледовских (избежать дублирования с локальными транскриптами).
 
-Например: любая случайная техническая лекция с конференции YouTube.
+- [ ] **Step 2: Запустить режим preview с YouTube-ссылкой**
 
-- [ ] **Step 2: Запустить скилл с YouTube-ссылкой**
-
-```
-/konspekt-preview https://www.youtube.com/watch?v=<id>
+```text
+/konspekt preview https://www.youtube.com/watch?v=<id>
 ```
 
 - [ ] **Step 3: Проверить артефакты**
@@ -916,21 +886,24 @@ git commit -m "fix(preview): уточнить SKILL.md после end-to-end т�
 - В `transcripts/` появился файл `SRC_transcript_<slug>.srt` с 30-секундными блоками.
 - В `transcripts/` появился файл `<slug>_обзор.md` рядом.
 - Обзор соответствует формату.
+- Длительность взята из таймстампов (последний `00:HH:MM,...`).
 
 - [ ] **Step 4: Проверить кейс «нет субтитров»**
 
-Найти YouTube-видео без субтитров (или с заблокированными — короткие shorts иногда без них). Запустить.
+Найти YouTube-видео без субтитров (короткие shorts иногда без них). Запустить.
 
-Expected: сообщение от скилла «У этого видео нет субтитров. Транскрибируй отдельно...» и остановка. Никакого мусорного обзора не сгенерировано.
+Expected: сообщение «У этого видео нет субтитров. Транскрибируй отдельно...» и остановка. Никакого мусорного обзора не сгенерировано.
 
 - [ ] **Step 5: Если есть проблемы — править**
 
-Например: yt-dlp не находит языки → уточнить аргумент `--sub-langs`. Скрипт падает на UTF-8 → добавить кодировку. SKILL.md не упоминает edge case → дописать.
+Например: `--sub-langs orig` не сработал → уточнить аргумент (`ru`, `en`, или `.*` с пост-выбором). Скрипт падает на UTF-8 → добавить `errors='replace'`. preview.md не упоминает edge case → дописать.
+
+Правки в Python — могут идти через codex (создать промпт «вот текущий код, вот проблема, исправь только X»), либо вручную, если правка маленькая.
 
 - [ ] **Step 6: Commit правок (если были)**
 
 ```bash
-git add .claude/skills/konspekt-preview/
+git add .claude/skills/konspekt/
 git commit -m "fix(preview): уточнения после YouTube end-to-end теста"
 ```
 
@@ -943,24 +916,27 @@ git commit -m "fix(preview): уточнения после YouTube end-to-end т
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Добавить упоминание скилла в CLAUDE.md**
+- [ ] **Step 1: Добавить упоминание режима preview в CLAUDE.md**
 
-Открыть `CLAUDE.md` (корень проекта) и добавить раздел или строку:
+Найти в `CLAUDE.md` (корень проекта) раздел про скилл `/konspekt`. Дополнить упоминание режимов:
 
 ```markdown
-## Доступные скиллы
+Когда пользователь даёт транскрипт или просит создать карту смыслов / конспект / виджет —
+использовать скилл `/konspekt`. Он содержит полный пайплайн и все необходимые инструкции.
 
-- `/konspekt` — полный мастер-MD из транскрипта (см. `.claude/skills/konspekt/`).
-- `/konspekt-preview` — предварительная оценка видео (связный обзор ~800–950 слов; см. `.claude/skills/konspekt-preview/`).
+Режимы скилла:
+- `/konspekt <путь>` — полный мастер-MD (основной режим).
+- `/konspekt — сделай виджет из <файл>` — виджет (Слой 2 + Слой 3).
+- `/konspekt preview <путь или YouTube-URL>` — предварительный обзор видео (~800–950 слов).
 ```
 
-Если такого раздела ещё нет — добавить его после блока «Как работать». Если уже есть — дописать строку про `/konspekt-preview`.
+(Точная формулировка может отличаться — встроить в существующий текст так, чтобы органично смотрелось.)
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add CLAUDE.md
-git commit -m "docs: упомянуть скилл /konspekt-preview в CLAUDE.md"
+git commit -m "docs: упомянуть режим /konspekt preview в CLAUDE.md"
 ```
 
 ---
@@ -971,21 +947,44 @@ git commit -m "docs: упомянуть скилл /konspekt-preview в CLAUDE.m
 
 - [ ] **Step 1: Прогнать всё ещё раз кратко**
 
-- Все тесты проходят: `cd .claude/skills/konspekt-preview && python -m pytest tests/ -v`
+- Все тесты проходят: `cd .claude/skills/konspekt && python -m pytest tests/test_youtube_to_srt.py -v`
 - Структура файлов соответствует разделу «File Structure» этого плана.
 - Спека и план закоммичены.
+- Существующие тесты режима `master` не сломались: `cd .claude/skills/konspekt && python -m pytest tests/ -v` (вся папка tests).
 
 - [ ] **Step 2: Сказать пользователю «обнови хранилище»**
 
-Сообщить, что скилл готов, попросить пользователя сказать «обнови хранилище» — тогда обновится `D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/projects/konspekt-project.md` (запись про новый скилл).
+Сообщить, что режим готов, попросить пользователя сказать «обнови хранилище» — тогда обновится `D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/projects/konspekt-project.md` (запись про новый режим `preview` внутри `/konspekt`).
 
 ---
 
 ## Notes for the implementer
 
-- **Кодировки.** Все Python-вызовы `subprocess.run` с `encoding='utf-8'` — на Windows иначе ломается кириллица в заголовках YouTube. Если всё равно ломается — попробовать `errors='replace'`.
-- **`--sub-langs orig`.** Это значение yt-dlp для оригинального языка видео. Если на конкретном видео не сработает — fallback на конкретные коды (`ru`, `en`) или `--sub-langs '.*'` с последующим выбором первого `.srt`.
-- **PowerShell на Windows.** Для запуска тестов из PowerShell использовать `cd .claude/skills/konspekt-preview ; python -m pytest tests/ -v` (точка с запятой вместо `&&`, который в PowerShell 5.1 не работает).
-- **`mkdir -p` в Bash vs `New-Item -Force` в PowerShell.** В шагах используется bash-форма; на Windows может потребоваться PowerShell-вариант (см. Task 6).
-- **При первом запуске скилла** проверять, что Claude Code прочитал именно новый `SKILL.md`, а не закешировал старый. При сомнении — перезапустить сессию.
-- **При расхождении обзора с эталоном** — не «починить вручную в файле», а **найти и поправить правило в SKILL.md**, после чего перегенерировать. Иначе следующий запуск выдаст ту же ошибку.
+### Про codex
+
+- **Точные флаги `codex exec`** — см. `D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/knowledge/codex-as-subagent.md`. Если что-то не работает — там же подводные камни Windows-путей.
+- **Качество ~75–80% от Opus.** Готовься ревьюить и иногда править руками. Если codex даёт что-то сильно «не то» — лучше переформулировать промпт или дописать руками, чем гонять циклы.
+- **Накладные расходы.** На 3 Python-задачах экономия скромная. Если кажется, что промпт писать дольше, чем код — пиши код сам.
+- **Кодировки.** Все Python-вызовы `subprocess.run` должны быть с `encoding='utf-8'` — на Windows иначе ломается кириллица в заголовках YouTube. Если в коде от codex этого нет — добавить вручную.
+
+### Про PowerShell
+
+- Для запуска тестов из PowerShell: `cd .claude/skills/konspekt ; python -m pytest tests/test_youtube_to_srt.py -v` (точка с запятой вместо `&&`).
+- `rm` в bash. В PowerShell: `Remove-Item _codex_prompt_*.txt`.
+
+### Про SKILL.md / preview.md
+
+- **При расхождении обзора с эталоном** — не «починить вручную в файле», а **найти и поправить правило в `preview.md`**, после чего перегенерировать.
+- **При протечке правил мастер-MD** — усилить раздел «ВАЖНО: изоляция» в `preview.md` или дописать конкретные запреты в раздел 2.3 «Что НЕ должно быть».
+- При первом запуске режима после изменений в `SKILL.md` или `preview.md` — рассмотреть перезапуск сессии Claude Code, чтобы наверняка прочитать актуальную версию.
+
+### Про `--sub-langs orig`
+
+- Это специальное значение yt-dlp для оригинального языка видео. Если на конкретном видео не работает — fallback на конкретные коды (`ru`, `en`) или `--sub-langs '.*'` с последующим выбором первого `.srt`.
+
+### Про существующие тесты режима `master`
+
+- В `.claude/skills/konspekt/tests/` уже есть тесты других модулей (`test_widget_generator.py`, `test_preprocessor.py`, `test_route_block.py`). После каждой Python-задачи проверять, что они не сломались:
+  ```bash
+  cd .claude/skills/konspekt && python -m pytest tests/ -v
+  ```
