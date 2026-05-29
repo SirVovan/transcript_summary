@@ -8,7 +8,13 @@ transcripts/**
 
 # Одноразовые patch-скрипты Слоя 3 — артефакты конкретных лекций, не код скилла.
 # Шаблон для копирования: .claude/skills/konspekt/recon_patch_template.py
+# Живут в _patches/, самоуничтожаются через 7 дней после создания.
 patch_recon_*.py
+_patches/*
+!_patches/.gitkeep
+
+# Playwright MCP — снимки и логи браузера, пишутся плагином в cwd
+.playwright-mcp/
 
 # OS
 .DS_Store
