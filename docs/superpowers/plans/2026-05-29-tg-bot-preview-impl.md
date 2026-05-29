@@ -604,7 +604,7 @@ def _minimal_env(tmp_path: Path) -> dict[str, str]:
         "OWNER_USER_ID": "12345",
         "KEYS_ENCRYPTION_KEY": "_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk=",
         "LLM_PROVIDER": "claude_cli",
-        "LLM_MODEL": "claude-sonnet-4-6",
+        "LLM_MODEL": "claude-opus-4-8",
         "BOT_BASE_DIR": str(tmp_path),
     }
 
@@ -1716,7 +1716,7 @@ def _mock_anthropic_response(text: str):
 
 
 def test_anthropic_generate_returns_text():
-    client = AnthropicClient(api_key="sk-ant-test", model="claude-sonnet-4-6", max_output_tokens=4096)
+    client = AnthropicClient(api_key="sk-ant-test", model="claude-opus-4-8", max_output_tokens=4096)
     with patch.object(client._client.messages, "create", return_value=_mock_anthropic_response("MD content")):
         result = client.generate(system="sys", user="usr")
     assert result == "MD content"
@@ -1724,7 +1724,7 @@ def test_anthropic_generate_returns_text():
 
 def test_anthropic_rate_limit_maps_to_typed_exception():
     import anthropic
-    client = AnthropicClient(api_key="x", model="claude-sonnet-4-6", max_output_tokens=4096)
+    client = AnthropicClient(api_key="x", model="claude-opus-4-8", max_output_tokens=4096)
     err = anthropic.RateLimitError(message="rl", response=MagicMock(), body=None)
     with patch.object(client._client.messages, "create", side_effect=err):
         with pytest.raises(LLMRateLimitError):
@@ -1733,7 +1733,7 @@ def test_anthropic_rate_limit_maps_to_typed_exception():
 
 def test_anthropic_auth_error_maps():
     import anthropic
-    client = AnthropicClient(api_key="x", model="claude-sonnet-4-6", max_output_tokens=4096)
+    client = AnthropicClient(api_key="x", model="claude-opus-4-8", max_output_tokens=4096)
     err = anthropic.AuthenticationError(message="auth", response=MagicMock(), body=None)
     with patch.object(client._client.messages, "create", side_effect=err):
         with pytest.raises(LLMAuthError):
@@ -2026,7 +2026,7 @@ def _mock_run(returncode=0, stdout="", stderr=""):
 
 
 def test_claude_cli_returns_stdout_on_success():
-    client = ClaudeCLIClient(model="claude-sonnet-4-6", timeout_sec=240)
+    client = ClaudeCLIClient(model="claude-opus-4-8", timeout_sec=240)
     with patch("subprocess.run", return_value=_mock_run(stdout="OK MD")) as m:
         result = client.generate(system="sys", user="usr")
     assert result == "OK MD"
@@ -2039,7 +2039,7 @@ def test_claude_cli_returns_stdout_on_success():
 
 def test_claude_cli_does_not_pass_prompt_as_arg():
     """Защита от утечки промта в Process Explorer и Windows command line limit."""
-    client = ClaudeCLIClient(model="claude-sonnet-4-6", timeout_sec=240)
+    client = ClaudeCLIClient(model="claude-opus-4-8", timeout_sec=240)
     with patch("subprocess.run", return_value=_mock_run(stdout="ok")) as m:
         client.generate(system="sensitive_sys", user="sensitive_user")
     args = m.call_args.args[0]
@@ -2049,14 +2049,14 @@ def test_claude_cli_does_not_pass_prompt_as_arg():
 
 
 def test_claude_cli_not_logged_in_maps_to_auth():
-    client = ClaudeCLIClient(model="claude-sonnet-4-6", timeout_sec=240)
+    client = ClaudeCLIClient(model="claude-opus-4-8", timeout_sec=240)
     with patch("subprocess.run", return_value=_mock_run(returncode=1, stderr="not logged in to Claude")):
         with pytest.raises(LLMAuthError):
             client.generate("s", "u")
 
 
 def test_claude_cli_timeout():
-    client = ClaudeCLIClient(model="claude-sonnet-4-6", timeout_sec=2)
+    client = ClaudeCLIClient(model="claude-opus-4-8", timeout_sec=2)
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=2)):
         with pytest.raises(LLMError, match="timeout"):
             client.generate("s", "u")

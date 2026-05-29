@@ -580,14 +580,22 @@ KEYS_ENCRYPTION_KEY=
 
 
 # === LLM-ПРОВАЙДЕР (выбери один пресет) ===
+#
+# Алиасы Claude Code: opus → claude-opus-4-8, sonnet → claude-sonnet-4-6,
+# haiku → claude-haiku-4-5. Для production предпочтительно явные ID, чтобы
+# поведение не менялось при обновлении alias.
 
 # --- ПРЕСЕТ 1: claude_cli (дефолт, бесплатно через подписку Claude Code) ---
+# Для preview — Opus 4.8 даёт лучшее качество нарратива/ToV/смысловых акцентов.
+# Подписка Max покрывает Opus без оплаты по токенам.
 LLM_PROVIDER=claude_cli
-LLM_MODEL=claude-sonnet-4-6
+LLM_MODEL=claude-opus-4-8
 
 # --- ПРЕСЕТ 2: Anthropic API ---
+# Opus 4.8: $5 input / $25 output за 1M; Sonnet 4.6: $3 / $15.
+# На один обзор (~30K input + ~1.5K output) — Opus ≈ $0.19, Sonnet ≈ $0.11.
 # LLM_PROVIDER=anthropic
-# LLM_MODEL=claude-sonnet-4-6
+# LLM_MODEL=claude-opus-4-8
 # LLM_API_KEY=sk-ant-...
 
 # --- ПРЕСЕТ 3: Gemini 3.5 Flash через AI Studio ---
