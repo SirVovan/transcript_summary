@@ -32,4 +32,9 @@ read_on_demand: true
 - 2026-05-28 — Тайминги при упоминании эпизодов в `preview`: формат пунктов «На вынос» + общее правило 2.4 для всех разделов обзора → [файл](2026-05-28-preview-episode-timings.md)
 - 2026-05-28 — Исходный бриф режима `/konspekt preview` (`Summary_instruction.md`): с этого текста началась разработка третьего режима скилла → [файл](2026-05-28-preview-mode-original-brief-Summary_instruction.md)
 - 2026-05-29 — Карантин `_patches/` для patch_recon Слоя 3: новая локация + блок самоуничтожения через 7 дней с последней правки → [файл](2026-05-29-patches-quarantine-self-destruct.md)
-- 2026-05-29 — Дизайн Telegram-бота поверх `/konspekt preview`: архитектурное решение о разделении `preview.md` на `preview_prompt.md` (жанровое ядро) + тонкую CLI-обёртку; артефакты в `docs/superpowers/` → [файл](2026-05-29-tg-bot-design-and-preview-split.md)
+
+## Ответвления проекта
+
+История архитектурных решений по производным проектам — в отдельных подпапках:
+
+- **Telegram-бот** поверх `/konspekt preview` (начало 2026-05-29): отдельный self-hosted сервис, переиспользующий жанровое ядро preview → [tg-bot/INDEX.md](tg-bot/INDEX.md)
