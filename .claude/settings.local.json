@@ -50,7 +50,13 @@
       "Bash(cd \"D:/Users/Вова/Desktop/Work/VibeCoding/konspekt-project/.claude/skills/konspekt\")",
       "Bash(start \"\" \"transcripts/Виджет — Велс. Практикум Д1-Ч1. С чего начинается сборка агентной системы.html\")",
       "Bash(find . -iname \"history.md\" -not -path \"*/node_modules/*\")",
-      "Bash(ls \"D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/projects/konspekt-project.md\")"
+      "Bash(ls \"D:/Users/Вова/Desktop/Work/VibeCoding/vibecoding vault/projects/konspekt-project.md\")",
+      "Bash(ls patch_recon_*.py)",
+      "Bash(ls -la docs/evolution/)",
+      "Bash(grep -nE \"^---$|^## Сегмент\" \"f:/Наш Архив/ИИ/Ледовских/Вайбкодинг/Модуль 2. Создание AI продуктов/Приложение в телеграм/Урок 10. Приложения в ТГ. Что создаем/OUT_Вайбкодинг. М2-У10-1. Зачем приложения в мессенджерах. Mini App vs ссылка на сайт_мастер.md\")",
+      "Bash(grep -nE \"^---$|^## \" \"f:/Наш Архив/ИИ/Ледовских/Вайбкодинг/Модуль 2. Создание AI продуктов/Приложение в телеграм/Урок 12. Публикуем и тестируем/OUT_Вайбкодинг. М2-У12 \\(ч1+ч2\\). Дорабатываем приложение и разбираемся, что такое бэкенд_мастер.md\")",
+      "Bash(rm __c.js)",
+      "Bash(rm \"patch_recon_m2u12.py\")"
     ]
   }
 }
