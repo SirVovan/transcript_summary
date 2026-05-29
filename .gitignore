@@ -19,3 +19,6 @@ _patches/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Сессионные черновики (Codex-ревью, временные документы)
+.tmp/
