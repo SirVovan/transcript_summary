@@ -32,6 +32,7 @@ read_on_demand: true
 - 2026-05-28 — Тайминги при упоминании эпизодов в `preview`: формат пунктов «На вынос» + общее правило 2.4 для всех разделов обзора → [файл](2026-05-28-preview-episode-timings.md)
 - 2026-05-28 — Исходный бриф режима `/konspekt preview` (`Summary_instruction.md`): с этого текста началась разработка третьего режима скилла → [файл](2026-05-28-preview-mode-original-brief-Summary_instruction.md)
 - 2026-05-29 — Карантин `_patches/` для patch_recon Слоя 3: новая локация + блок самоуничтожения через 7 дней с последней правки → [файл](2026-05-29-patches-quarantine-self-destruct.md)
+- 2026-05-31 — Нарезка длинного транскрипта на части по смысловым швам: скрипт `split_transcript.py` (info/windows/split), целевой размер 90 мин, авторезка > 100 мин, ручной режим `/konspekt split` → [файл](2026-05-31-split-long-transcript.md)
 
 ## Ответвления проекта
 
