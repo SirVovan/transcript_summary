@@ -33,6 +33,8 @@ read_on_demand: true
 - 2026-05-28 — Исходный бриф режима `/konspekt preview` (`Summary_instruction.md`): с этого текста началась разработка третьего режима скилла → [файл](2026-05-28-preview-mode-original-brief-Summary_instruction.md)
 - 2026-05-29 — Карантин `_patches/` для patch_recon Слоя 3: новая локация + блок самоуничтожения через 7 дней с последней правки → [файл](2026-05-29-patches-quarantine-self-destruct.md)
 - 2026-05-31 — Нарезка длинного транскрипта на части по смысловым швам: скрипт `split_transcript.py` (info/windows/split), целевой размер 90 мин, авторезка > 100 мин, ручной режим `/konspekt split` → [файл](2026-05-31-split-long-transcript.md)
+- 2026-06-02 — Ссылка на источник и встроенный плеер в обзоре `preview`: метка `# source:` в начале `.srt` (нормализованный YouTube-URL), блок «Источник» + `![](url)` в шапке обзора → [файл](2026-06-02-preview-video-embed.md)
+- 2026-06-02 — Метаданные автора/канала/даты в `preview` + детекция перезаливов по плейлистам: `#`-метки channel/channel_id/uploader/upload_date/repost в шапке SRC, матчинг по членству в dump-плейлистах (гейт по каналу-ферме), ветвление A/B/C в ШАГ 2.2, профили `preview_profiles/`, префикс канала в имени файла → [файл](2026-06-02-preview-metadata-and-channel-registry.md)
 
 ## Ответвления проекта
 
