@@ -2,9 +2,8 @@
 __pycache__/
 *.pyc
 
-# Транскрипты и выходные файлы скилла — не коммитить (результат работы, не код)
-transcripts/**
-!transcripts/.gitkeep
+# Продукты скилла (конспекты/обзоры/виджеты) вынесены из репо в воркспейс
+# D:\Users\Вова\Desktop\Work\VibeCoding\K_T_P\ — в репо не коммитятся.
 
 # Одноразовые patch-скрипты Слоя 3 — артефакты конкретных лекций, не код скилла.
 # Шаблон для копирования: .claude/skills/konspekt/recon_patch_template.py
@@ -15,6 +14,10 @@ _patches/*
 
 # Playwright MCP — снимки и логи браузера, пишутся плагином в cwd
 .playwright-mcp/
+
+# Claude Code — рабочие артефакты (git worktree'ы ответвлений, локи планировщика)
+.claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # OS
 .DS_Store
