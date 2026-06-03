@@ -400,6 +400,11 @@ def _try_yt_dlp_subs(url: str, tmp_template: str, sub_flag: str, cookies_browser
     # до записи субтитров.
     cmd = [
         "yt-dlp",
+        # YouTube задепрекейтил извлечение без JS-движка: часть видео отдаёт
+        # URL дорожек субтитров только после решения JS-challenge. Указываем
+        # node (deno по умолчанию в окружении нет).
+        "--js-runtimes",
+        "node",
         sub_flag,
         "--sub-langs",
         ",".join(SUB_LANGS_PRIORITY),
