@@ -37,6 +37,7 @@ read_on_demand: true
 - 2026-06-02 — Метаданные автора/канала/даты в `preview` + детекция перезаливов по плейлистам: `#`-метки channel/channel_id/uploader/upload_date/repost в шапке SRC, матчинг по членству в dump-плейлистах (гейт по каналу-ферме), ветвление A/B/C в ШАГ 2.2, профили `preview_profiles/`, префикс канала в имени файла → [файл](2026-06-02-preview-metadata-and-channel-registry.md)
 - 2026-06-03 — Починка скачивания субтитров: `--js-runtimes node` в `youtube_to_srt.py` (YouTube перестал отдавать дорожки без JS-движка); попутно зафиксирован операционный нюанс лимита пути Windows 260 (укорачивать имя файла, `cd` не помогает) → [файл](2026-06-03-youtube-js-runtime-fix.md)
 - 2026-06-03 — Продукты вынесены в воркспейс K_T_P (структура по серии: `previews/<slug>/`, `konspekts/<серия>/`), скилл промоутнут до user-level через junction, пути запуска скриптов → `$HOME/...`, хук валидации виджета — воркспейс-scoped → [файл](2026-06-03-workspace-split-and-user-level-skill.md)
+- 2026-06-04 — `preview`: одна рабочая папка на канал (`previews/<канал-slug>/`) вместо папки на видео; YouTube качается во временную `_tmp_<video-id>/`, затем SRC переносится в папку канала по метке `# channel:`; slug папки = имя файла профиля в `preview_profiles/` → [файл](2026-06-04-preview-one-folder-per-channel.md)
 
 ## Ответвления проекта
 
