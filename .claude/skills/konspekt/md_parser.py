@@ -516,7 +516,7 @@ def _parse_text(block, prompt_counter):
             return
         # Проверяем, не метка ли промпта
         first = bq_buffer[0] if bq_buffer else ''
-        m = re.match(r'\*\*(Промпт[^*]*?):\*\*\s*$', first.strip())
+        m = re.match(r'\*\*((?:Промпт|Скрипт)[^*]*?):\*\*\s*$', first.strip())
         if m and len(bq_buffer) == 1:
             # Метка промпта - отложим, ждём fenced
             pending_prompt_label = m.group(1).strip()
