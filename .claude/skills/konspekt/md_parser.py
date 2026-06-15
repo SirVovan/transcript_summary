@@ -113,6 +113,18 @@ def _split_sections(text):
     if not segments:
         raise MasterMDParseError("Не найдено ни одного `## Сегмент N | ...`")
 
+    # Защита от пропущенных разделителей `---`: если `## Сегмент` в тексте больше,
+    # чем выделенных сегментов, значит секции склеились в один блок (не разрезались
+    # по `\n---\n`). Генератор иначе соберёт битый виджет, молча напечатав «JS syntax OK».
+    seg_headers = len(re.findall(r'(?m)^## Сегмент ', text))
+    if seg_headers > len(segments):
+        raise MasterMDParseError(
+            f"Найдено {seg_headers} заголовков `## Сегмент`, но выделено только "
+            f"{len(segments)} сегмент(ов): между верхнеуровневыми секциями пропущен "
+            f"разделитель `---` (строка `---` на отдельной строке между каждым "
+            f"`## Сегмент N`, `## Замысел и маршрут`, `## Логическая реконструкция`)."
+        )
+
     return {'header': header, 'route': route, 'reconstruction': reconstruction, 'segments': segments}
 
 
