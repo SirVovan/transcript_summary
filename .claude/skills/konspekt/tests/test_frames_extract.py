@@ -49,3 +49,13 @@ SHOWINFO = (
 
 def test_parse_showinfo_pts():
     assert frames_extract.parse_showinfo_pts(SHOWINFO) == [12.5, 47.0]
+
+
+# Task 2.4: dedup_by_gap tests
+def test_dedup_by_gap_min_gap():
+    assert frames_extract.dedup_by_gap([0.0, 1.0, 2.5, 5.0], min_gap=3.0) == [0.0, 5.0]
+
+
+def test_dedup_by_gap_cap():
+    res = frames_extract.dedup_by_gap([float(i) for i in range(0, 200, 1)], min_gap=0.0, cap=10)
+    assert len(res) <= 10

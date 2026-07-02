@@ -29,3 +29,13 @@ def cue_timecodes(srt_text):
 
 def parse_showinfo_pts(stderr):
     return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
+
+def dedup_by_gap(timecodes, min_gap=3.0, cap=60):
+    kept = []
+    for t in sorted(set(timecodes)):
+        if not kept or t - kept[-1] >= min_gap:
+            kept.append(t)
+    if len(kept) > cap:
+        step = len(kept) / cap
+        kept = [kept[int(i * step)] for i in range(cap)]
+    return kept
