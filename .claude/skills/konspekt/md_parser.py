@@ -65,12 +65,13 @@ SEGMENT_TYPE_RULES = [
 def parse_master_md(path):
     """Главная функция: читает файл, возвращает dict для build_html."""
     text = Path(path).read_text(encoding='utf-8')
+    base_dir = Path(path).parent
     sections = _split_sections(text)
     meta = _parse_meta(sections['header'], path)
     route = _parse_route(sections['route']) if sections['route'] else None
     reconstruction = _parse_reconstruction(sections['reconstruction']) if sections['reconstruction'] else None
     prompt_counter = [0]
-    segments = [_parse_segment(b, i + 1, prompt_counter) for i, b in enumerate(sections['segments'])]
+    segments = [_parse_segment(b, i + 1, prompt_counter, base_dir) for i, b in enumerate(sections['segments'])]
     return {
         'meta': meta,
         'route': route,
@@ -315,7 +316,7 @@ def _parse_reconstruction(block):
     }
 
 
-def _parse_segment(block, idx, prompt_counter):
+def _parse_segment(block, idx, prompt_counter, base_dir):
     """
     block - `## Сегмент N | ... | ...` + всё содержимое до следующего разделителя.
     idx - порядковый номер (1-based) для `id` ("01", "02", ...).
@@ -368,7 +369,7 @@ def _parse_segment(block, idx, prompt_counter):
     text_block = text_match.group(1).strip()
 
     right_html = _parse_map(map_block, segment_type)
-    text_html = _parse_text(text_block, prompt_counter)
+    text_html = _parse_text(text_block, prompt_counter, base_dir)
     body_html = f'<p><strong>Ключевая мысль:</strong> {_apply_inline(key_thought)}</p>{text_html}'
 
     return {
@@ -518,7 +519,7 @@ def _render_prompt(label_text, code_text, pid):
     )
 
 
-def _parse_text(block, prompt_counter):
+def _parse_text(block, prompt_counter, base_dir):
     """
     block - содержимое после `### Текст` до конца сегмента (без самой строки `### Текст`).
     prompt_counter - список [int] (используется как изменяемая ссылка для сквозной нумерации p1, p2...).
