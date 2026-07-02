@@ -182,7 +182,42 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 .tl-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .tl-badge{font-size:12px;font-weight:700;color:var(--c);letter-spacing:.02em}
 .tl-vtime{font-size:11px;color:var(--tx3);font-family:var(--fm)}
-.tl-vdesc{font-size:13px;color:var(--tx2);line-height:1.6}"""
+.tl-vdesc{font-size:13px;color:var(--tx2);line-height:1.6}
+
+/* ─── Адаптив: узкие экраны (телефон, планшет в портрете) ─── */
+@media (max-width:820px) {
+  body { overflow:auto; height:auto; min-height:100vh; display:block; padding:0; }
+  .shell { width:100%; max-width:none; height:auto; min-height:100vh; max-height:none; border-radius:0; box-shadow:none; }
+
+  /* топбар: бейдж+название сверху, лента номеров сегментов — отдельной прокручиваемой строкой */
+  .topbar { flex-wrap:wrap; padding:10px 14px; gap:8px; }
+  .tabs { width:100%; overflow-x:auto; overflow-y:hidden; padding-bottom:2px; -webkit-overflow-scrolling:touch; }
+  .tabs::-webkit-scrollbar { height:0 }
+  .tab { width:38px; height:38px; flex-shrink:0; }
+  .toc-panel { max-width:calc(100vw - 28px); }
+
+  /* колонки встают друг под друга, прокручивается вся страница */
+  .body, .body.body-tl { display:block; overflow:visible; }
+  .lcol, .lcol.lcol-full { border-right:none; border-bottom:1px solid var(--border); overflow:visible; padding:16px 18px 18px; }
+  .seg-body { overflow:visible; padding-right:0; font-size:15.5px; line-height:1.72; }
+  .seg-title { font-size:20px; }
+  .seg-body h3 { font-size:15px; }
+  .rcol { overflow:visible; }
+  .rcol-inner { overflow:visible; height:auto; padding:16px 18px 18px; }
+
+  /* футер с навигацией всегда под рукой */
+  .footer { position:sticky; bottom:0; padding:10px 14px; gap:10px; }
+  .btn { padding:9px 18px; font-size:13.5px; }
+
+  /* реконструкция/траектория: вертикальная лента в одну сторону */
+  .tl-list::before { left:9px; margin-left:0; }
+  .tl-item:nth-child(odd), .tl-item:nth-child(even) { justify-content:flex-start; padding-left:30px; padding-right:0; }
+  .tl-node { left:9px; transform:none; }
+}
+
+@media (max-width:480px) {
+  .course-title { display:none; }
+}"""
 
 # ──────────────────────────────────────────────────────────────────────
 # JS ENGINE (неизменная часть — движок виджета)
@@ -228,6 +263,12 @@ function render(){
   document.getElementById('pf').style.background=t.stripe;
   setTypeVars(t);
   document.querySelectorAll('.tab').forEach(function(el,i){el.classList.toggle('on',i===cur);});
+  var tabsEl=document.getElementById('tabs');
+  if(tabsEl){
+    var onTab=tabsEl.querySelector('.tab.on');
+    var wrap=onTab?onTab.closest('.tab-wrap'):null;
+    if(wrap)tabsEl.scrollLeft=wrap.offsetLeft-tabsEl.clientWidth/2+wrap.clientWidth/2;
+  }
   document.getElementById('pb').disabled=cur===0;
   document.getElementById('nb').textContent=cur===SEG.length-1?'В начало \u2192':'Далее \u2192';
   document.getElementById('finfo').textContent='Сегмент '+s.id+' из '+total+(s.timing?' \u00b7 '+s.timing:'');
