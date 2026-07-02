@@ -635,6 +635,15 @@ def _parse_text(block, prompt_counter, base_dir):
             i += 1
             continue
 
+        # Картинка-кадр: ![alt](src) на своей строке
+        m_img = re.match(r'^!\[(.*?)\]\((.+?)\)$', stripped)
+        if m_img:
+            img_html = _render_image(m_img.group(1), m_img.group(2), base_dir)
+            if img_html:
+                parts.append(img_html)
+            i += 1
+            continue
+
         # Маркированный список
         if stripped.startswith('- '):
             items = []
@@ -659,7 +668,7 @@ def _parse_text(block, prompt_counter, base_dir):
         while (
             i < len(lines)
             and lines[i].strip() != ''
-            and not lines[i].strip().startswith(('>', '#### ', '```', '- '))
+            and not lines[i].strip().startswith(('>', '#### ', '```', '- ', '!['))
             and not re.match(r'\d+\.\s+', lines[i].strip())
         ):
             para_lines.append(lines[i].strip())

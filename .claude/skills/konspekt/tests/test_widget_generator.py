@@ -169,3 +169,16 @@ def test_render_image_embeds_base64(tmp_path):
 def test_render_image_missing_file(tmp_path):
     out = md_parser._render_image('Нет файла', 'missing.png', tmp_path)
     assert out == ''
+
+
+# --- Item 4: строка-картинка в _parse_text ---
+
+def test_parse_text_image_line(tmp_path):
+    _make_png(tmp_path / "cand_01.png")
+    md = tmp_path / "MASTER_X.md"
+    md.write_text(_master("Абзац до.\n\n![Слайд 12](cand_01.png)\n\nАбзац после."), encoding="utf-8")
+    data = md_parser.parse_master_md(str(md))
+    body = data['segments'][0]['body']
+    assert '<figure' in body and 'data:image/' in body
+    assert body.index('<p>Абзац до.</p>') < body.index('<figure')
+    assert body.index('<figure') < body.index('<p>Абзац после.</p>')
