@@ -38,3 +38,14 @@ def test_cue_timecodes_finds_markers():
     assert 5.0 in tc
     assert 60.0 in tc
     assert 10.0 not in tc
+
+
+# Task 2.3: parse_showinfo_pts tests
+SHOWINFO = (
+    "[Parsed_showinfo_1 @ 0x..] n:0 pts:123 pts_time:12.5 pos:...\n"
+    "[Parsed_showinfo_1 @ 0x..] n:1 pts:456 pts_time:47.0 pos:...\n"
+)
+
+
+def test_parse_showinfo_pts():
+    assert frames_extract.parse_showinfo_pts(SHOWINFO) == [12.5, 47.0]

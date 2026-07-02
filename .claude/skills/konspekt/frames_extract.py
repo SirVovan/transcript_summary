@@ -26,3 +26,6 @@ def cue_timecodes(srt_text):
             start = tc_line.split('-->')[0].strip()
             out.append(_srt_time_to_sec(start))
     return sorted(set(out))
+
+def parse_showinfo_pts(stderr):
+    return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
