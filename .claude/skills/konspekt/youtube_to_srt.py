@@ -15,11 +15,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cookies_spec import DEFAULT_BROWSER, _service_profile_root, cookies_from_browser_args
+
 
 BLOCK_SECONDS = 30
 
-APP_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "konspekt-youtube"
-DEFAULT_COOKIES_BROWSER = "edge"
+DEFAULT_COOKIES_BROWSER = DEFAULT_BROWSER
 SUPPORTED_COOKIES_BROWSERS = ("edge", "chrome", "firefox")
 
 # Приоритетный список языков для скачивания субтитров.
@@ -147,28 +148,6 @@ def rebucket(segments: list[dict], block_seconds: int = BLOCK_SECONDS) -> list[d
     return buckets
 
 
-def _service_profile_root(browser: str) -> Path:
-    """Папка служебного профиля для выбранного браузера."""
-    return APP_DATA_ROOT / f"{browser}-profile"
-
-
-def _cookies_browser_spec(browser: str) -> str:
-    """Спецификация --cookies-from-browser для yt-dlp.
-
-    Для chromium-based браузеров (edge, chrome) указываем абсолютный путь до
-    подпапки Default — это служебный профиль, который мы создаём отдельно от
-    основного браузера пользователя. Для firefox yt-dlp хочет путь до
-    профиля целиком, без Default.
-    """
-    profile_root = _service_profile_root(browser)
-    profile_root.mkdir(parents=True, exist_ok=True)
-    if browser in ("edge", "chrome"):
-        default_dir = profile_root / "Default"
-        default_dir.mkdir(parents=True, exist_ok=True)
-        return f"{browser}:{default_dir}"
-    return f"{browser}:{profile_root}"
-
-
 def _find_browser_executable(browser: str) -> str | None:
     """Находит исполняемый файл браузера на Windows."""
     candidates_by_browser = {
@@ -292,8 +271,7 @@ def _get_video_metadata(url: str, cookies_browser: str) -> dict:
         "-f",
         "sb0",
         "--no-warnings",
-        "--cookies-from-browser",
-        _cookies_browser_spec(cookies_browser),
+        *cookies_from_browser_args(cookies_browser),
         url,
     ]
     result = subprocess.run(
@@ -357,8 +335,7 @@ def _fetch_playlist_video_ids(playlist_id: str, cookies_browser: str) -> set[str
         "--print",
         "%(id)s",
         "--no-warnings",
-        "--cookies-from-browser",
-        _cookies_browser_spec(cookies_browser),
+        *cookies_from_browser_args(cookies_browser),
         f"https://www.youtube.com/playlist?list={playlist_id}",
     ]
     result = subprocess.run(
@@ -414,8 +391,7 @@ def _try_yt_dlp_subs(url: str, tmp_template: str, sub_flag: str, cookies_browser
         "-f",
         "sb0",
         "--no-warnings",
-        "--cookies-from-browser",
-        _cookies_browser_spec(cookies_browser),
+        *cookies_from_browser_args(cookies_browser),
         "-o",
         tmp_template,
         url,
