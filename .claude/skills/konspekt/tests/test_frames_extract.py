@@ -7,6 +7,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import cookies_spec
 import frames_extract
 
+from pathlib import Path
+from PIL import Image
+
 
 def test_cookies_args_empty_when_no_browser():
     assert cookies_spec.cookies_from_browser_args('') == []
@@ -59,3 +62,24 @@ def test_dedup_by_gap_min_gap():
 def test_dedup_by_gap_cap():
     res = frames_extract.dedup_by_gap([float(i) for i in range(0, 200, 1)], min_gap=0.0, cap=10)
     assert len(res) <= 10
+
+
+# Task 2.5: _cand_num / contact_sheet tests
+def _png(path, size=(160, 90), color=(20, 40, 60)):
+    Image.new("RGB", size, color).save(path)
+
+
+def test_cand_num_from_name():
+    assert frames_extract._cand_num(Path("cand_0007.png")) == 7
+
+
+def test_contact_sheet_builds(tmp_path):
+    frames = []
+    for i in (1, 2, 3):
+        p = tmp_path / f"cand_{i:04d}.png"
+        _png(p); frames.append(p)
+    out = tmp_path / "contact_sheet.png"
+    res = frames_extract.contact_sheet(frames, out, cols=2, thumb_w=100)
+    assert res.exists()
+    im = Image.open(res)
+    assert im.width == 2 * 100          # cols * thumb_w

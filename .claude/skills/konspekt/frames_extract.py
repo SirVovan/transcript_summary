@@ -39,3 +39,60 @@ def dedup_by_gap(timecodes, min_gap=3.0, cap=60):
         step = len(kept) / cap
         kept = [kept[int(i * step)] for i in range(cap)]
     return kept
+
+def download_video(url, out_dir, browser=None):
+    from cookies_spec import cookies_from_browser_args, DEFAULT_BROWSER
+    if browser is None:
+        browser = DEFAULT_BROWSER
+    out = Path(out_dir) / 'video.%(ext)s'
+    cmd = ['yt-dlp', '-f', 'bv[height<=720]/best[height<=720]',
+           '-o', str(out), *cookies_from_browser_args(browser), url]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f'yt-dlp упал: {r.stderr.strip()[:300]}')
+    vids = sorted(Path(out_dir).glob('video.*'))
+    if not vids:
+        raise RuntimeError('yt-dlp: видео не скачано')
+    return vids[0]
+
+def scene_timecodes(video, threshold=0.3):
+    cmd = ['ffmpeg', '-i', str(video), '-vf',
+           f"select='gt(scene,{threshold})',showinfo", '-f', 'null', '-']
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f'ffmpeg scene-detect упал: {r.stderr.strip()[:300]}')
+    return parse_showinfo_pts(r.stderr)
+
+def extract_frame(video, t, out, shift=0.7):
+    # -ss ПЕРЕД -i = быстрый seek; shift выводит на устоявшийся кадр после перехода.
+    cmd = ['ffmpeg', '-y', '-ss', str(max(0.0, t + shift)), '-i', str(video),
+           '-frames:v', '1', '-q:v', '2', str(out)]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+def _cand_num(path):
+    m = re.search(r'(\d+)', Path(path).stem)
+    return int(m.group(1)) if m else 0
+
+def contact_sheet(frames, out, cols=5, thumb_w=320):
+    """Пронумерованная простыня из списка кадров (PIL). Номер = _cand_num(файла)."""
+    from PIL import Image, ImageDraw
+    if not frames:
+        raise RuntimeError('contact_sheet: нет кадров')
+    thumbs = []
+    for f in frames:
+        im = Image.open(f).convert('RGB')
+        h = round(im.height * thumb_w / im.width)
+        im = im.resize((thumb_w, h))
+        d = ImageDraw.Draw(im)
+        d.rectangle([0, 0, 46, 22], fill=(0, 0, 0))
+        d.text((5, 4), str(_cand_num(f)), fill=(255, 230, 0))
+        thumbs.append(im)
+    cell_h = max(t.height for t in thumbs)
+    rows = (len(thumbs) + cols - 1) // cols
+    sheet = Image.new('RGB', (cols * thumb_w, rows * cell_h), (28, 28, 32))
+    for i, t in enumerate(thumbs):
+        r, c = divmod(i, cols)
+        sheet.paste(t, (c * thumb_w, r * cell_h))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    return Path(out)
