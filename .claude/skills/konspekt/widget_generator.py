@@ -184,6 +184,10 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 .tl-vtime{font-size:11px;color:var(--tx3);font-family:var(--fm)}
 .tl-vdesc{font-size:13px;color:var(--tx2);line-height:1.6}
 
+figure.frame { margin:10px 0; }
+figure.frame img { display:block; width:100%; max-width:100%; height:auto; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+figure.frame figcaption { margin-top:4px; font-size:11.5px; color:#6b7280; }
+
 /* ─── Адаптив: узкие экраны (телефон, планшет в портрете) ─── */
 @media (max-width:820px) {
   body { overflow:auto; height:auto; min-height:100vh; display:block; padding:0; }

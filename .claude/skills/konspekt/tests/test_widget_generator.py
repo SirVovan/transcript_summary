@@ -6,6 +6,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from widget_generator import build_reconstruction_html, build_timeline_html, build_html
+import widget_generator
 import md_parser
 
 
@@ -182,3 +183,15 @@ def test_parse_text_image_line(tmp_path):
     assert '<figure' in body and 'data:image/' in body
     assert body.index('<p>Абзац до.</p>') < body.index('<figure')
     assert body.index('<figure') < body.index('<p>Абзац после.</p>')
+
+
+# --- Item 5: figure.frame CSS в собранном HTML ---
+
+def test_build_html_with_frame(tmp_path):
+    _make_png(tmp_path / "c.png")
+    md = tmp_path / "MASTER_X.md"
+    md.write_text(_master("![Слайд](c.png)"), encoding="utf-8")
+    data = md_parser.parse_master_md(str(md))
+    out_html = widget_generator.build_html(data)
+    assert 'figure.frame' in out_html          # CSS присутствует
+    assert 'data:image/jpeg;base64,' in out_html
