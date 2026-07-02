@@ -44,7 +44,7 @@ if _todo_count > 0:
 
 WIDGET = Path(
     # TODO: вставить путь к HTML-виджету лекции.
-    # Пример: "transcripts/OUT_Виджет — Вайбкодинг. М2-У8. Название.html"
+    # Пример: "transcripts/WIDGET_Вайбкодинг. М2-У8. Название.html"
     "transcripts/TODO_WIDGET_PATH.html"
 )
 
