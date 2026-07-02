@@ -24,7 +24,7 @@ def main():
 
     filename = os.path.basename(file_path)
 
-    if not re.match(r'Виджет.*\.html$', filename):
+    if not re.match(r'(Виджет.*|WIDGET_.*)\.html$', filename):
         sys.exit(0)
 
     try:
