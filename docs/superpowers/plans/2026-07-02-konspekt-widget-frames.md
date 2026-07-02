@@ -78,17 +78,35 @@ Run: `git status --short`
 # tests/test_widget_generator.py — добавить
 import md_parser
 
+# ВНИМАНИЕ: _parse_segment (md_parser.py:319) требует РЕАЛЬНЫЙ формат:
+# заголовок `## Сегмент N | HH:MM:SS-HH:MM:SS | Тема`, строки `**Тип:**`
+# и `**Ключевая мысль:**`, порядок `### Карта` ПЕРЕД `### Текст`.
+# Этот хелпер даёт валидную минимальную фикстуру — переиспользуется тестами ниже.
+_SEG = (
+    "## Сегмент 1 | 00:00:00-00:01:00 | Заголовок\n\n"
+    "**Тип:** идея\n**Ключевая мысль:** мысль\n\n"
+    "### Карта\n\n- **Термин:** пояснение\n\n"
+    "### Текст\n\n{body}\n"
+)
+def _master(body="Проза."):
+    return "# Название\n\n---\n\n" + _SEG.format(body=body)
+
 def test_out_name_master_prefix(tmp_path):
     p = tmp_path / "MASTER_Урок 2.md"
-    p.write_text("# Название\n\n---\n\n## Сегмент 1 | concept | Заголовок\n\n### Текст\n\nПроза.\n\n### Карта\n\n- **Термин:** пояснение\n", encoding="utf-8")
-    meta = md_parser.parse_master_md(str(p))['meta']
-    assert meta['out'] == "WIDGET_Урок 2.html"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
+
+def test_out_name_frames_copy_suffix(tmp_path):
+    # Производная копия ветки кадров -> имя виджета БЕЗ суффикса _с_кадрами (инвариант спеки).
+    p = tmp_path / "MASTER_Урок 2_с_кадрами.md"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
 
 def test_out_name_legacy_suffix(tmp_path):
+    # Легаси-курсы (OUT_*_мастер.md): сохраняем прежнее поведение — снимаем _мастер.
     p = tmp_path / "OUT_Урок 2_мастер.md"
-    p.write_text("# Название\n\n---\n\n## Сегмент 1 | concept | Заголовок\n\n### Текст\n\nПроза.\n\n### Карта\n\n- **Термин:** пояснение\n", encoding="utf-8")
-    meta = md_parser.parse_master_md(str(p))['meta']
-    assert meta['out'] == "Виджет — OUT_Урок 2_мастер.html"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "Виджет — OUT_Урок 2.html"
 ```
 
 - [ ] **Step 2: Запустить — убедиться, что падает**
@@ -103,7 +121,11 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_g
 ```python
     stem = Path(path).stem
     if stem.startswith('MASTER_'):
-        out = f"WIDGET_{stem[len('MASTER_'):]}.html"
+        core = stem[len('MASTER_'):]
+        # Производная копия ветки кадров MASTER_X_с_кадрами.md -> WIDGET_X.html
+        # (инвариант спеки: виджет без суффикса _с_кадрами).
+        core = re.sub(r'_с_кадрами$', '', core)
+        out = f"WIDGET_{core}.html"
     else:
         # Легаси-вход (курсы на OUT_*_мастер.md): сохраняем прежнее поведение.
         out_stem = re.sub(r'_мастер$', '', stem)
@@ -113,7 +135,7 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_g
 - [ ] **Step 4: Запустить оба теста — зелёные**
 
 Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_generator.py" -k out_name -v`
-Ожидание: 2 passed.
+Ожидание: 3 passed.
 
 - [ ] **Step 5: Коммит**
 
@@ -128,25 +150,40 @@ git commit -m "feat(konspekt): имя выхода MASTER_ -> WIDGET_ (мигр�
 - Modify: `.claude/skills/konspekt/SKILL.md` — `OUT_[название]_мастер.md`, `_чN_мастер.md`, отчёт «Мастер-MD готов» → `MASTER_[название].md`
 - Modify: `.claude/skills/konspekt/preview.md` — `OUT_<Канал>_<название>_обзор.md`, `OUT_<название>_обзор.md`, отчёт «Обзор готов» → `REVIEW_<Канал>_<название>.md`
 - Modify: `.claude/skills/konspekt/layer2_widget.md` — вход `…_мастер.md` → `MASTER_[Название].md`; выход `Виджет — [Название].html`/`.json` → `WIDGET_[Название].html`/`.json`
+- Modify: `.claude/skills/konspekt/validate_widget.py:27` — regex hook-валидатора матчит только `Виджет.*\.html$`; расширить на `WIDGET_*.html`
 
 - [ ] **Step 1: Найти якоря**
 
-Run: `grep -rn "OUT_\|_мастер\|_обзор\|Виджет —" .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md`
+Run: `rg -n "OUT_|_мастер|_обзор|Виджет —" .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md`
 
 - [ ] **Step 2: Заменить продуктовые имена по таблице выше**
 
 Править вручную по каждому попаданию. Тело имени (`[Название]`, `<Канал>`) не менять — только префикс/суффикс. `SRC_` не трогать.
 
-- [ ] **Step 3: Проверить, что старых продуктовых имён не осталось**
+- [ ] **Step 3: Обновить regex hook-валидатора**
 
-Run: `grep -rn "_мастер\.md\|_обзор\.md\|Виджет —\|OUT_.*_мастер" .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md`
+В `validate_widget.py` строка 27 — заменить:
+
+```python
+    if not re.match(r'Виджет.*\.html$', filename):
+```
+на:
+```python
+    if not re.match(r'(Виджет.*|WIDGET_.*)\.html$', filename):
+```
+
+(Старый паттерн `Виджет` оставляем для легаси-виджетов курсов.)
+
+- [ ] **Step 4: Проверить, что старых продуктовых имён не осталось**
+
+Run: `rg -n "_мастер\.md|_обзор\.md|Виджет —|OUT_.*_мастер" .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md`
 Ожидание: пусто (кроме мест про автопоиск курсов — их правит Task 0.3).
 
-- [ ] **Step 4: Коммит**
+- [ ] **Step 5: Коммит**
 
 ```bash
-git add .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md
-git commit -m "docs(konspekt): генерация имён на префиксы MASTER_/REVIEW_/WIDGET_"
+git add .claude/skills/konspekt/SKILL.md .claude/skills/konspekt/preview.md .claude/skills/konspekt/layer2_widget.md .claude/skills/konspekt/validate_widget.py
+git commit -m "docs(konspekt): генерация имён на префиксы MASTER_/REVIEW_/WIDGET_ + hook-валидатор"
 ```
 
 ### Task 0.3: Автопоиск серии — двойной поиск
@@ -171,7 +208,7 @@ git commit -m "docs(konspekt): генерация имён на префиксы
 
 - [ ] **Step 4: Полный grep продуктовых старых имён по скиллу**
 
-Run: `grep -rn "_мастер\.md\|_обзор\.md\|Виджет —" .claude/skills/konspekt/ --include=*.md --include=*.py | grep -v tests/ | grep -v _archive`
+Run: `rg -n "_мастер\.md|_обзор\.md|Виджет —" .claude/skills/konspekt/ -g '*.md' -g '*.py' -g '!tests/**' -g '!**/_archive*/**'`
 Ожидание: остаются только упоминания легаси-паттерна `OUT_*_мастер.md` в контексте двойного поиска. `SRC_` на месте.
 
 - [ ] **Step 5: Прогнать весь pytest**
@@ -202,7 +239,7 @@ git commit -m "docs(konspekt): автопоиск серии — двойной 
 
 - [ ] **Step 1: Найти сигнатуру `_parse_segment` и его вызов `_parse_text`**
 
-Run: `grep -n "_parse_segment\|_parse_text(" .claude/skills/konspekt/md_parser.py`
+Run: `rg -n "_parse_segment|_parse_text\(" .claude/skills/konspekt/md_parser.py`
 
 - [ ] **Step 2: Пробросить `base_dir` без изменения поведения**
 
@@ -254,16 +291,17 @@ def _make_png(path, size=(40, 20), color=(10, 20, 30)):
 
 def test_render_image_embeds_base64(tmp_path):
     _make_png(tmp_path / "f.png")
-    html = md_parser._render_image('Подпись <b>&', 'f.png', tmp_path)
-    assert html.startswith('<figure')
-    assert 'data:image/jpeg;base64,' in html
-    assert '<figcaption>' in html
-    assert 'Подпись &lt;b&gt;&amp;' in html   # экранирование
-    assert '<b>' not in html
+    # alt с кавычкой, <, & — идёт в атрибут alt="...", кавычки обязаны экранироваться
+    out = md_parser._render_image('Слайд "12" <b>&', 'f.png', tmp_path)
+    assert out.startswith('<figure')
+    assert 'data:image/jpeg;base64,' in out
+    assert '<figcaption>' in out
+    assert '&lt;b&gt;' in out and '&amp;' in out and '&quot;' in out
+    assert '<b>' not in out
 
-def test_render_image_missing_file(tmp_path, capsys):
-    html = md_parser._render_image('Нет файла', 'missing.png', tmp_path)
-    assert html == ''
+def test_render_image_missing_file(tmp_path):
+    out = md_parser._render_image('Нет файла', 'missing.png', tmp_path)
+    assert out == ''
 ```
 
 - [ ] **Step 2: Запустить — падает**
@@ -273,7 +311,7 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_g
 
 - [ ] **Step 3: Реализовать `_render_image`**
 
-В `md_parser.py` (рядом с `_render_prompt`; вверху файла добавить `import base64`, `import io`, `import sys`, `from PIL import Image` — проверить, что дублей нет):
+В `md_parser.py` (рядом с `_render_prompt`; вверху файла добавить `import base64`, `import io`, `import sys`, `import html`, `from PIL import Image` — проверить, что дублей нет):
 
 ```python
 IMG_MAX_WIDTH = 1280
@@ -298,29 +336,19 @@ def _render_image(alt, src, base_dir):
         img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
         mime = 'image/jpeg'
     b64 = base64.b64encode(buf.getvalue()).decode('ascii')
-    cap = _escape_html(alt)
+    cap = html.escape(alt, quote=True)   # экранирует и кавычки — alt идёт в атрибут
     return (f'<figure class="frame"><img alt="{cap}" '
             f'src="data:{mime};base64,{b64}"><figcaption>{cap}</figcaption></figure>')
 ```
 
-- [ ] **Step 4: Убедиться, что `_escape_html` существует**
+> Владелец встраивания картинок — `md_parser.py` (не `widget_generator.py`): тело сегмента приходит в генератор уже готовым HTML (в `var BODY`), поэтому резолвить `![](path)` нужно на этапе парсинга. `widget_generator.py` отвечает только за CSS (Task 1.4). JSON-путь сборки виджета картинки в `### Текст` не поддерживает — это осознанное ограничение (ветка кадров всегда идёт через MD-копию).
 
-Run: `grep -n "_escape_html\|def _escape" .claude/skills/konspekt/md_parser.py`
-Если нет функции экранирования HTML — добавить:
-
-```python
-def _escape_html(s):
-    return (s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
-```
-
-(Если аналог уже есть под другим именем — использовать его и поправить вызов в `_render_image`.)
-
-- [ ] **Step 5: Запустить тесты — зелёные**
+- [ ] **Step 4: Запустить тесты — зелёные**
 
 Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_generator.py" -k render_image -v`
 Ожидание: 2 passed.
 
-- [ ] **Step 6: Коммит**
+- [ ] **Step 5: Коммит**
 
 ```bash
 git add .claude/skills/konspekt/md_parser.py .claude/skills/konspekt/tests/test_widget_generator.py
@@ -340,15 +368,11 @@ git commit -m "feat(konspekt): _render_image — base64-встраивание �
 - [ ] **Step 1: Написать падающий тест**
 
 ```python
-# tests/test_widget_generator.py — добавить
+# tests/test_widget_generator.py — добавить (использует _master и _make_png выше)
 def test_parse_text_image_line(tmp_path):
     _make_png(tmp_path / "cand_01.png")
     md = tmp_path / "MASTER_X.md"
-    md.write_text(
-        "# Название\n\n---\n\n## Сегмент 1 | concept | Заголовок\n\n"
-        "### Текст\n\nАбзац до.\n\n![Слайд 12](cand_01.png)\n\nАбзац после.\n\n"
-        "### Карта\n\n- **Термин:** пояснение\n",
-        encoding="utf-8")
+    md.write_text(_master("Абзац до.\n\n![Слайд 12](cand_01.png)\n\nАбзац после."), encoding="utf-8")
     data = md_parser.parse_master_md(str(md))
     body = data['segments'][0]['body']
     assert '<figure' in body and 'data:image/' in body
@@ -412,19 +436,16 @@ git commit -m "feat(konspekt): парс элемента-картинки ![](pa
 
 ```python
 # tests/test_widget_generator.py — добавить
-import widget_generator, subprocess, shutil
+import widget_generator
 
 def test_build_html_with_frame(tmp_path):
     _make_png(tmp_path / "c.png")
     md = tmp_path / "MASTER_X.md"
-    md.write_text(
-        "# Название\n\n---\n\n## Сегмент 1 | concept | Заголовок\n\n"
-        "### Текст\n\n![Слайд](c.png)\n\n### Карта\n\n- **Термин:** пояснение\n",
-        encoding="utf-8")
+    md.write_text(_master("![Слайд](c.png)"), encoding="utf-8")
     data = md_parser.parse_master_md(str(md))
-    html = widget_generator.build_html(data)
-    assert 'figure.frame' in html          # CSS присутствует
-    assert 'data:image/jpeg;base64,' in html
+    out_html = widget_generator.build_html(data)
+    assert 'figure.frame' in out_html          # CSS присутствует
+    assert 'data:image/jpeg;base64,' in out_html
 ```
 
 - [ ] **Step 2: Запустить — падает**
@@ -479,11 +500,11 @@ git commit -m "feat(konspekt): CSS figure.frame для встроенных ка
 - Test: `.claude/skills/konspekt/tests/test_frames_extract.py`
 
 **Interfaces:**
-- Produces: `cookies_from_browser_args(browser: str) -> list[str]` — список аргументов yt-dlp (`['--cookies-from-browser', <spec>]`) либо `[]`. Вынесена из существующей логики `youtube_to_srt.py` без изменения поведения.
+- Produces: `cookies_from_browser_args(browser: str) -> list[str]` — список аргументов yt-dlp (`['--cookies-from-browser', <spec>]`) либо `[]`. Плюс константа `DEFAULT_BROWSER` (текущий дефолт `youtube_to_srt.py` — `edge`). Вынесено из существующей логики `youtube_to_srt.py` без изменения поведения; диагностика cookie-lock/cookie-error остаётся в `youtube_to_srt.py`.
 
 - [ ] **Step 1: Найти текущую cookies-логику**
 
-Run: `grep -n "cookies-from-browser\|cookies_browser\|def .*cookie" .claude/skills/konspekt/youtube_to_srt.py`
+Run: `rg -n "cookies-from-browser|cookies_browser|def .*cookie" .claude/skills/konspekt/youtube_to_srt.py`
 
 - [ ] **Step 2: Написать тест на вынесенную функцию**
 
@@ -563,6 +584,8 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_e
 
 - [ ] **Step 3: Реализовать `cue_timecodes`**
 
+В тест дописать импорт модуля (в шапку `tests/test_frames_extract.py`, рядом с `import cookies_spec`): `import frames_extract`.
+
 В новом `frames_extract.py`:
 
 ```python
@@ -608,21 +631,21 @@ git add .claude/skills/konspekt/frames_extract.py .claude/skills/konspekt/tests/
 git commit -m "feat(konspekt): transcript-cues -> таймкоды кандидатов"
 ```
 
-### Task 2.3: Надёжный маппинг showinfo → файлы
+### Task 2.3: Парсер `showinfo` → таймкоды
 
 **Files:**
 - Modify: `.claude/skills/konspekt/frames_extract.py`
 - Test: `.claude/skills/konspekt/tests/test_frames_extract.py`
 
 **Interfaces:**
-- Produces: `parse_showinfo_pts(stderr: str) -> list[float]` — список `pts_time` из вывода `showinfo` в порядке появления. `zip_candidates(pts: list[float], files: list[Path]) -> list[tuple[Path, float]]` — сшивает по порядку (по длине min), не полагаясь на счётчик `n`.
+- Produces: `parse_showinfo_pts(stderr: str) -> list[float]` — список `pts_time` из вывода `showinfo` в порядке появления. Используется в `scene_timecodes` (Task 2.5).
+
+> Отдельного `zip_candidates(pts, files)` не делаем: файлов на этапе `scene_timecodes` не создаётся (прогон `-f null`), а кадры извлекаются позже отдельным проходом `extract_frame`. Нумерация кандидатов (`cand_id`) идёт от `enumerate(tcs, 1)` в `build_candidates` (Task 2.6) — сшивать pts с файлами не нужно.
 
 - [ ] **Step 1: Написать падающий тест**
 
 ```python
 # tests/test_frames_extract.py — добавить
-from pathlib import Path
-
 SHOWINFO = (
     "[Parsed_showinfo_1 @ 0x..] n:0 pts:123 pts_time:12.5 pos:...\n"
     "[Parsed_showinfo_1 @ 0x..] n:1 pts:456 pts_time:47.0 pos:...\n"
@@ -630,16 +653,11 @@ SHOWINFO = (
 
 def test_parse_showinfo_pts():
     assert frames_extract.parse_showinfo_pts(SHOWINFO) == [12.5, 47.0]
-
-def test_zip_candidates_by_order():
-    files = [Path('cand_0001.png'), Path('cand_0002.png')]
-    res = frames_extract.zip_candidates([12.5, 47.0, 99.9], files)
-    assert res == [(Path('cand_0001.png'), 12.5), (Path('cand_0002.png'), 47.0)]
 ```
 
 - [ ] **Step 2: Запустить — падает**
 
-Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py" -k "showinfo or zip" -v`
+Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py::test_parse_showinfo_pts" -v`
 Ожидание: FAIL.
 
 - [ ] **Step 3: Реализовать**
@@ -647,22 +665,18 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_e
 ```python
 def parse_showinfo_pts(stderr):
     return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
-
-def zip_candidates(pts, files):
-    files = sorted(files, key=lambda p: p.name)
-    return [(f, t) for f, t in zip(files, pts)]
 ```
 
-- [ ] **Step 4: Запустить — зелёные**
+- [ ] **Step 4: Запустить — зелёный**
 
-Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py" -k "showinfo or zip" -v`
-Ожидание: 2 passed.
+Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py::test_parse_showinfo_pts" -v`
+Ожидание: PASS.
 
 - [ ] **Step 5: Коммит**
 
 ```bash
 git add .claude/skills/konspekt/frames_extract.py .claude/skills/konspekt/tests/test_frames_extract.py
-git commit -m "feat(konspekt): надёжный маппинг showinfo pts_time -> файлы"
+git commit -m "feat(konspekt): parse_showinfo_pts -> таймкоды из showinfo"
 ```
 
 ### Task 2.4: Дедуп кандидатов по интервалу
@@ -724,20 +738,55 @@ git commit -m "feat(konspekt): дедуп кандидатов по min-gap + ca
 
 **Interfaces:**
 - Produces:
-  - `download_video(url, out_dir, browser='') -> Path` — yt-dlp `-f "bv[height<=720]/best[height<=720]"`, cookies из `cookies_spec`.
-  - `scene_timecodes(video: Path, threshold=0.3) -> list[float]` — прогон `select='gt(scene,threshold)',showinfo`, `parse_showinfo_pts` из stderr.
-  - `extract_frame(video: Path, t: float, out: Path, shift=0.7)` — снять один кадр в `t+shift` (устоявшийся слайд).
-  - `contact_sheet(frames: list[Path], out: Path, cols=5)` — ffmpeg `tile` в простыню с номерами.
+  - `download_video(url, out_dir, browser=None) -> Path` — yt-dlp `-f "bv[height<=720]/best[height<=720]"`, cookies из `cookies_spec` (по умолчанию `DEFAULT_BROWSER`). При ненулевом коде yt-dlp — `RuntimeError` (ветка ловит → виджет без кадров).
+  - `scene_timecodes(video: Path, threshold=0.3) -> list[float]` — прогон `select='gt(scene,threshold)',showinfo`, `parse_showinfo_pts` из stderr. При ненулевом коде ffmpeg — `RuntimeError` (не молчаливый пустой список).
+  - `extract_frame(video: Path, t: float, out: Path, shift=0.7)` — снять один кадр в `t+shift` (устоявшийся слайд). `-ss` перед `-i` = быстрый seek — осознанный компромисс: для слайдов достаточно, для резких демонстраций менее точен.
+  - `_cand_num(path) -> int` — число из имени `cand_NNNN.png` (= `cand_id`).
+  - `contact_sheet(frames: list[Path], out: Path, cols=5, thumb_w=320) -> Path` — пронумерованная простыня из **самого списка** `frames` (PIL), номер на каждом мини-кадре = `_cand_num`.
 
-- [ ] **Step 1: Реализовать обёртки (тонкие, без сложной логики)**
+- [ ] **Step 1: Написать падающий тест простыни/нумерации**
 
 ```python
-def download_video(url, out_dir, browser=''):
-    from cookies_spec import cookies_from_browser_args
+# tests/test_frames_extract.py — добавить
+from pathlib import Path
+from PIL import Image
+
+def _png(path, size=(160, 90), color=(20, 40, 60)):
+    Image.new("RGB", size, color).save(path)
+
+def test_cand_num_from_name():
+    assert frames_extract._cand_num(Path("cand_0007.png")) == 7
+
+def test_contact_sheet_builds(tmp_path):
+    frames = []
+    for i in (1, 2, 3):
+        p = tmp_path / f"cand_{i:04d}.png"
+        _png(p); frames.append(p)
+    out = tmp_path / "contact_sheet.png"
+    res = frames_extract.contact_sheet(frames, out, cols=2, thumb_w=100)
+    assert res.exists()
+    im = Image.open(res)
+    assert im.width == 2 * 100          # cols * thumb_w
+```
+
+- [ ] **Step 2: Запустить — падает**
+
+Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py" -k "cand_num or contact_sheet" -v`
+Ожидание: FAIL.
+
+- [ ] **Step 3: Реализовать обёртки**
+
+```python
+def download_video(url, out_dir, browser=None):
+    from cookies_spec import cookies_from_browser_args, DEFAULT_BROWSER
+    if browser is None:
+        browser = DEFAULT_BROWSER
     out = Path(out_dir) / 'video.%(ext)s'
     cmd = ['yt-dlp', '-f', 'bv[height<=720]/best[height<=720]',
            '-o', str(out), *cookies_from_browser_args(browser), url]
-    subprocess.run(cmd, check=True)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f'yt-dlp упал: {r.stderr.strip()[:300]}')
     vids = sorted(Path(out_dir).glob('video.*'))
     if not vids:
         raise RuntimeError('yt-dlp: видео не скачано')
@@ -747,42 +796,58 @@ def scene_timecodes(video, threshold=0.3):
     cmd = ['ffmpeg', '-i', str(video), '-vf',
            f"select='gt(scene,{threshold})',showinfo", '-f', 'null', '-']
     r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f'ffmpeg scene-detect упал: {r.stderr.strip()[:300]}')
     return parse_showinfo_pts(r.stderr)
 
 def extract_frame(video, t, out, shift=0.7):
+    # -ss ПЕРЕД -i = быстрый seek; shift выводит на устоявшийся кадр после перехода.
     cmd = ['ffmpeg', '-y', '-ss', str(max(0.0, t + shift)), '-i', str(video),
            '-frames:v', '1', '-q:v', '2', str(out)]
     subprocess.run(cmd, check=True, capture_output=True)
 
-def contact_sheet(frames, out, cols=5):
+def _cand_num(path):
+    m = re.search(r'(\d+)', Path(path).stem)
+    return int(m.group(1)) if m else 0
+
+def contact_sheet(frames, out, cols=5, thumb_w=320):
+    """Пронумерованная простыня из списка кадров (PIL). Номер = _cand_num(файла)."""
+    from PIL import Image, ImageDraw
     if not frames:
         raise RuntimeError('contact_sheet: нет кадров')
-    rows = (len(frames) + cols - 1) // cols
-    inputs = []
+    thumbs = []
     for f in frames:
-        inputs += ['-i', str(f)]
-    # drawtext-номера рисуются на этапе извлечения кадров (proc. в orchestrate); здесь простая плитка
-    filt = f"tile={cols}x{rows}"
-    cmd = ['ffmpeg', '-y', *inputs, '-filter_complex',
-           f"{''.join(f'[{i}:v]' for i in range(len(frames)))}hstack=inputs={len(frames)}" if rows == 1 else f"[0:v]{filt}",
-           str(out)]
-    # Простой надёжный путь: собрать плитку через montage-подобный tile из файлов одинакового размера
-    cmd = ['ffmpeg', '-y', '-i', str(frames[0].parent / 'cand_%04d.png'),
-           '-vf', f'scale=320:-1,tile={cols}x{rows}', str(out)]
-    subprocess.run(cmd, check=True, capture_output=True)
+        im = Image.open(f).convert('RGB')
+        h = round(im.height * thumb_w / im.width)
+        im = im.resize((thumb_w, h))
+        d = ImageDraw.Draw(im)
+        d.rectangle([0, 0, 46, 22], fill=(0, 0, 0))
+        d.text((5, 4), str(_cand_num(f)), fill=(255, 230, 0))
+        thumbs.append(im)
+    cell_h = max(t.height for t in thumbs)
+    rows = (len(thumbs) + cols - 1) // cols
+    sheet = Image.new('RGB', (cols * thumb_w, rows * cell_h), (28, 28, 32))
+    for i, t in enumerate(thumbs):
+        r, c = divmod(i, cols)
+        sheet.paste(t, (c * thumb_w, r * cell_h))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    return Path(out)
 ```
 
-> Примечание реализующему: `contact_sheet` через `tile` требует кандидатов одинаковой ширины и последовательной нумерации `cand_%04d.png`. Кандидаты извлекаются в `frames_work/` именно с таким шаблоном (Task 2.6). Номер кадра на простыне = порядковый (i+1), реализующий добавляет подпись номера через `drawtext` при извлечении кадра или отдельным проходом — достаточно, чтобы vision мог сослаться на номер.
+> Номер на простыне = `_cand_num` из имени `cand_NNNN.png`, тот же `cand_id`, что уходит в vision-JSON (Task 2.6, схема). Так vision надёжно ссылается на кадр по видимому номеру.
 
-- [ ] **Step 2: Smoke-проверка на коротком видео (ручная)**
+- [ ] **Step 4: Запустить тест простыни — зелёный; smoke на коротком видео (ручная)**
 
-Взять любой локальный короткий mp4 (или скачать 30-сек ролик), прогнать в python-REPL: `scene_timecodes`, `extract_frame`, `contact_sheet`. Убедиться, что PNG создаются и простыня собирается.
+Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_extract.py" -k "cand_num or contact_sheet" -v`
+Ожидание: 2 passed.
+Затем взять короткий mp4, в python-REPL проверить `scene_timecodes`/`extract_frame` (создаются PNG).
 
-- [ ] **Step 3: Коммит**
+- [ ] **Step 5: Коммит**
 
 ```bash
-git add .claude/skills/konspekt/frames_extract.py
-git commit -m "feat(konspekt): обёртки ffmpeg/yt-dlp (видео, scene, кадр, contact-sheet)"
+git add .claude/skills/konspekt/frames_extract.py .claude/skills/konspekt/tests/test_frames_extract.py
+git commit -m "feat(konspekt): обёртки ffmpeg/yt-dlp + пронумерованная contact-sheet (PIL)"
 ```
 
 ### Task 2.6: Оркестратор извлечения + availability-гейт Codex
@@ -868,7 +933,7 @@ def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=
 }
 ```
 
-CLI `main()`: аргументы `--url`/`--video` (взаимоисключающие), `--srt`, `--work-dir`, `--threshold`, `--dry-run`. При `--url` → `download_video`; собрать `build_candidates`; собрать `contact_sheet`; напечатать путь простыни и число кандидатов. При `--dry-run` — остановиться после простыни (не звать vision). Печатать отчёт: найдено кандидатов / путь contact-sheet.
+CLI `main()`: аргументы `--url`/`--video` (взаимоисключающие), `--srt`, `--work-dir`, `--threshold`, `--dry-run`. При `--url` → `download_video`; `cands = build_candidates(...)`; `contact_sheet([f for f, _ in cands], work_dir/'contact_sheet.png')`; напечатать путь простыни и число кандидатов. При `--dry-run` — остановиться после простыни (не звать vision). Печатать отчёт: найдено кандидатов / путь contact-sheet.
 
 - [ ] **Step 4: Тесты гейта — зелёные; весь набор**
 
@@ -1026,6 +1091,21 @@ git commit -m "docs(konspekt): триггер 'виджет с кадрами' +
 - cookies общий модуль → 2.1.
 - Тесты (parser, frames_extract, имя) → распределены; E2E → Фаза 5.
 
-**Плейсхолдеры:** код приведён для всех тестируемых задач. `contact_sheet` содержит явное примечание про шаблон `cand_%04d.png` и номера — не заглушка, а зафиксированное требование к реализующему.
+**Плейсхолдеры:** код приведён для всех тестируемых задач. `contact_sheet` собирается на PIL из самого списка кадров, номер = `_cand_num` из имени файла — покрыто юнит-тестом.
 
-**Согласованность типов:** `cue_timecodes`/`scene_timecodes` → `list[float]`; `dedup_by_gap(list[float])→list[float]`; `build_candidates→list[(Path,float)]`; `_render_image(alt,src,base_dir)→str`; `parse_master_md['meta']['out']` — имя `WIDGET_*.html`. Имена функций сквозные.
+**Согласованность типов:** `cue_timecodes`/`scene_timecodes` → `list[float]`; `dedup_by_gap(list[float])→list[float]`; `build_candidates→list[(Path,float)]`; `_render_image(alt,src,base_dir)→str`; `contact_sheet(list[Path],...)→Path`; `parse_master_md['meta']['out']` — имя `WIDGET_*.html`. Имена функций сквозные.
+
+## Ревизия по ревью Codex (2026-07-02)
+
+Учтены находки Codex (REQUEST_CHANGES) после первой версии плана:
+
+- **[критично]** Тестовые фикстуры приведены к реальному формату `_parse_segment` (заголовок с таймингом `HH:MM:SS-HH:MM:SS`, `**Тип:**`, `**Ключевая мысль:**`, порядок `### Карта` → `### Текст`) — хелпер `_master()`/`_SEG` в тестах.
+- **[критично]** Устранено самопротиворечие Task 0.1: легаси-тест ожидает `Виджет — OUT_Урок 2.html` (совпадает с кодом, снимающим `_мастер`).
+- **[критично]** Инвариант спеки закрыт: `_parse_meta` снимает суффикс `_с_кадрами` → производная `MASTER_X_с_кадрами.md` собирается в `WIDGET_X.html` (тест `test_out_name_frames_copy_suffix`).
+- **[критично]** `contact_sheet` переписан на PIL: строит пронумерованную простыню из **списка кадров** (убран дубль `cmd` и чтение `cand_%04d.png`), номера видимы для vision, покрыт тестом.
+- **[критично]** Мёртвый `zip_candidates` удалён (Task 2.3): нумерация идёт от `enumerate` в `build_candidates`.
+- **[поправлено]** `scene_timecodes`/`download_video` проверяют `returncode` (не молчаливый пустой список); `download_video` по умолчанию берёт `DEFAULT_BROWSER` (edge) из `cookies_spec`.
+- **[поправлено]** `_render_image` использует `html.escape(alt, quote=True)` — кавычки в `alt`-атрибуте больше не ломают HTML.
+- **[поправлено]** Явно зафиксирован владелец встраивания картинок — `md_parser.py`; JSON-путь сборки картинки не поддерживает (осознанно).
+- **[поправлено]** Фаза 0 обновляет `validate_widget.py` (regex hook под `WIDGET_*.html`).
+- **[мелочь]** Проверочные команды переведены с `grep` на `rg` (Windows/кириллица).
