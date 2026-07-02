@@ -16,9 +16,13 @@ md_parser.py - парсер мастер-MD конспекта в dict-стру�
     data = parse_master_md("transcripts/...мастер.md")
 """
 
+import base64
 import html
+import io
 import re
+import sys
 from pathlib import Path
+from PIL import Image
 
 
 class MasterMDParseError(Exception):
@@ -517,6 +521,33 @@ def _render_prompt(label_text, code_text, pid):
         f'<div class="pr-text">{safe_code}</div>'
         f'</div>'
     )
+
+
+IMG_MAX_WIDTH = 1280
+
+def _render_image(alt, src, base_dir):
+    """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
+    path = Path(base_dir) / src
+    try:
+        img = Image.open(path)
+        img.load()
+    except Exception as e:
+        print(f"[frames] пропуск картинки {src!r}: {e}", file=sys.stderr)
+        return ''
+    if img.width > IMG_MAX_WIDTH:
+        h = round(img.height * IMG_MAX_WIDTH / img.width)
+        img = img.resize((IMG_MAX_WIDTH, h))
+    buf = io.BytesIO()
+    if img.mode in ('RGBA', 'LA', 'P'):
+        img.convert('RGBA').save(buf, format='PNG', optimize=True)
+        mime = 'image/png'
+    else:
+        img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
+        mime = 'image/jpeg'
+    b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+    cap = html.escape(alt, quote=True)   # экранирует и кавычки — alt идёт в атрибут
+    return (f'<figure class="frame"><img alt="{cap}" '
+            f'src="data:{mime};base64,{b64}"><figcaption>{cap}</figcaption></figure>')
 
 
 def _parse_text(block, prompt_counter, base_dir):

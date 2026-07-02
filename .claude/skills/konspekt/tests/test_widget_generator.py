@@ -1,6 +1,8 @@
 import pytest
 import os
 import sys
+from pathlib import Path
+from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from widget_generator import build_reconstruction_html, build_timeline_html, build_html
@@ -145,3 +147,25 @@ def test_out_name_legacy_suffix(tmp_path):
     p = tmp_path / "OUT_Урок 2_мастер.md"
     p.write_text(_master(), encoding="utf-8")
     assert md_parser.parse_master_md(str(p))['meta']['out'] == "Виджет — OUT_Урок 2.html"
+
+
+# --- Item 3: _render_image ---
+
+def _make_png(path, size=(40, 20), color=(10, 20, 30)):
+    Image.new("RGB", size, color).save(path)
+
+
+def test_render_image_embeds_base64(tmp_path):
+    _make_png(tmp_path / "f.png")
+    # alt с кавычкой, <, & — идёт в атрибут alt="...", кавычки обязаны экранироваться
+    out = md_parser._render_image('Слайд "12" <b>&', 'f.png', tmp_path)
+    assert out.startswith('<figure')
+    assert 'data:image/jpeg;base64,' in out
+    assert '<figcaption>' in out
+    assert '&lt;b&gt;' in out and '&amp;' in out and '&quot;' in out
+    assert '<b>' not in out
+
+
+def test_render_image_missing_file(tmp_path):
+    out = md_parser._render_image('Нет файла', 'missing.png', tmp_path)
+    assert out == ''
