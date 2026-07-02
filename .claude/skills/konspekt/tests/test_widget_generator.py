@@ -4,6 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from widget_generator import build_reconstruction_html, build_timeline_html, build_html
+import md_parser
 
 
 # --- Item 1: build_reconstruction_html ---
@@ -111,3 +112,36 @@ def test_build_html_no_trajectory_no_crash():
     """widget builds fine without trajectory field"""
     html = build_html(_make_sample_data(with_trajectory=False))
     assert 'Логическая реконструкция' in html
+
+
+# --- Item 3: Output filename logic (MASTER_ -> WIDGET_) ---
+
+# ВНИМАНИЕ: _parse_segment (md_parser.py:319) требует РЕАЛЬНЫЙ формат:
+# заголовок `## Сегмент N | HH:MM:SS-HH:MM:SS | Тема`, строки `**Тип:**`
+# и `**Ключевая мысль:**`, порядок `### Карта` ПЕРЕД `### Текст`.
+# Этот хелпер даёт валидную минимальную фикстуру — переиспользуется тестами ниже.
+_SEG = (
+    "## Сегмент 1 | 00:00:00-00:01:00 | Заголовок\n\n"
+    "**Тип:** идея\n**Ключевая мысль:** мысль\n\n"
+    "### Карта\n\n- **Термин:** пояснение\n\n"
+    "### Текст\n\n{body}\n"
+)
+def _master(body="Проза."):
+    return "# Название\n\n---\n\n" + _SEG.format(body=body)
+
+def test_out_name_master_prefix(tmp_path):
+    p = tmp_path / "MASTER_Урок 2.md"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
+
+def test_out_name_frames_copy_suffix(tmp_path):
+    # Производная копия ветки кадров -> имя виджета БЕЗ суффикса _с_кадрами (инвариант спеки).
+    p = tmp_path / "MASTER_Урок 2_с_кадрами.md"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
+
+def test_out_name_legacy_suffix(tmp_path):
+    # Легаси-курсы (OUT_*_мастер.md): сохраняем прежнее поведение — снимаем _мастер.
+    p = tmp_path / "OUT_Урок 2_мастер.md"
+    p.write_text(_master(), encoding="utf-8")
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "Виджет — OUT_Урок 2.html"

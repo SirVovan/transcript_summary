@@ -165,8 +165,16 @@ def _parse_meta(header, path):
         title = f"{title} · {speaker}"
 
     stem = Path(path).stem
-    out_stem = re.sub(r'_мастер$', '', stem)
-    out = f"Виджет — {out_stem}.html"
+    if stem.startswith('MASTER_'):
+        core = stem[len('MASTER_'):]
+        # Производная копия ветки кадров MASTER_X_с_кадрами.md -> WIDGET_X.html
+        # (инвариант спеки: виджет без суффикса _с_кадрами).
+        core = re.sub(r'_с_кадрами$', '', core)
+        out = f"WIDGET_{core}.html"
+    else:
+        # Легаси-вход (курсы на OUT_*_мастер.md): сохраняем прежнее поведение.
+        out_stem = re.sub(r'_мастер$', '', stem)
+        out = f"Виджет — {out_stem}.html"
 
     return {'badge': badge, 'title': title, 'out': out}
 
