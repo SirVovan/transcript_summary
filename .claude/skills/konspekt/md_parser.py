@@ -22,7 +22,6 @@ import io
 import re
 import sys
 from pathlib import Path
-from PIL import Image
 
 
 class MasterMDParseError(Exception):
@@ -527,6 +526,7 @@ IMG_MAX_WIDTH = 1280
 
 def _render_image(alt, src, base_dir):
     """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
+    from PIL import Image  # локальный импорт: обычный (без кадров) путь виджета не тянет Pillow
     path = Path(base_dir) / src
     try:
         img = Image.open(path)

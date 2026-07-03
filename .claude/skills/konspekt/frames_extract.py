@@ -112,7 +112,11 @@ def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=
     out = []
     for idx, t in enumerate(tcs, 1):
         f = work / f'cand_{idx:04d}.png'
-        extract_frame(video, t, f)
+        try:
+            extract_frame(video, t, f)
+        except subprocess.CalledProcessError:
+            # плохой таймкод (например, seek за конец видео) не рушит весь батч
+            continue
         if f.exists():
             out.append((f, t))
     return out
