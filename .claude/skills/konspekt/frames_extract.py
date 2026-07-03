@@ -1,4 +1,5 @@
 """Извлечение кадров-кандидатов для opt-in ветки виджета /konspekt."""
+import argparse
 import re
 import subprocess
 from pathlib import Path
@@ -96,3 +97,52 @@ def contact_sheet(frames, out, cols=5, thumb_w=320):
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)
     return Path(out)
+
+def codex_available():
+    try:
+        return subprocess.run(['codex', '--version'],
+                              capture_output=True).returncode == 0
+    except Exception:
+        return False
+
+def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=60):
+    work = Path(work_dir); work.mkdir(parents=True, exist_ok=True)
+    tcs = dedup_by_gap(scene_timecodes(video, threshold) + cue_timecodes(srt_text),
+                       min_gap=min_gap, cap=cap)
+    out = []
+    for idx, t in enumerate(tcs, 1):
+        f = work / f'cand_{idx:04d}.png'
+        extract_frame(video, t, f)
+        if f.exists():
+            out.append((f, t))
+    return out
+
+def main():
+    parser = argparse.ArgumentParser(description='Извлечение кадров-кандидатов для виджета /konspekt.')
+    src = parser.add_mutually_exclusive_group(required=True)
+    src.add_argument('--url', help='YouTube URL для скачивания видео')
+    src.add_argument('--video', help='путь к локальному видеофайлу')
+    parser.add_argument('--srt', required=True, help='путь к .srt транскрипту')
+    parser.add_argument('--work-dir', required=True, help='рабочая папка для кадров и простыни')
+    parser.add_argument('--threshold', type=float, default=0.3, help='порог scene-detect ffmpeg')
+    parser.add_argument('--dry-run', action='store_true', help='остановиться после сборки простыни')
+    args = parser.parse_args()
+
+    work_dir = Path(args.work_dir)
+    if args.url:
+        video = download_video(args.url, work_dir)
+    else:
+        video = Path(args.video)
+
+    srt_text = Path(args.srt).read_text(encoding='utf-8')
+    cands = build_candidates(video, srt_text, work_dir, threshold=args.threshold)
+    sheet_path = contact_sheet([f for f, _ in cands], work_dir / 'contact_sheet.png')
+
+    print(f'Кандидатов найдено: {len(cands)}')
+    print(f'Contact-sheet: {sheet_path}')
+
+    if args.dry_run:
+        return
+
+if __name__ == '__main__':
+    main()

@@ -83,3 +83,16 @@ def test_contact_sheet_builds(tmp_path):
     assert res.exists()
     im = Image.open(res)
     assert im.width == 2 * 100          # cols * thumb_w
+
+
+# Task 2.6: codex_available tests
+def test_codex_available_true(monkeypatch):
+    class R: returncode = 0
+    monkeypatch.setattr(frames_extract.subprocess, 'run', lambda *a, **k: R())
+    assert frames_extract.codex_available() is True
+
+
+def test_codex_available_false(monkeypatch):
+    def boom(*a, **k): raise FileNotFoundError()
+    monkeypatch.setattr(frames_extract.subprocess, 'run', boom)
+    assert frames_extract.codex_available() is False

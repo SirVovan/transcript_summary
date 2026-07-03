@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cand_id": {"type": "integer"},
+          "timecode": {"type": "number"},
+          "type": {"type": "string", "enum": ["prompt", "slide-text", "illustration", "drop"]},
+          "text": {"type": "string"},
+          "caption": {"type": "string"},
+          "segment_hint": {"type": "string"},
+          "confidence": {"type": "number"}
+        },
+        "required": ["cand_id", "type", "confidence"]
+      }
+    }
+  },
+  "required": ["frames"]
+}
