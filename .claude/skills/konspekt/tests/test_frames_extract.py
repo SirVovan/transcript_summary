@@ -62,6 +62,16 @@ def test_dedup_by_gap_min_gap():
 def test_dedup_by_gap_cap():
     res = frames_extract.dedup_by_gap([float(i) for i in range(0, 200, 1)], min_gap=0.0, cap=10)
     assert len(res) <= 10
+    assert res[0] == 0.0
+    assert res[-1] == 199.0
+
+
+def test_dedup_by_gap_cap_zero():
+    assert frames_extract.dedup_by_gap([1.0, 2.0], min_gap=0.0, cap=0) == []
+
+
+def test_dedup_by_gap_returns_shorter_list_unchanged():
+    assert frames_extract.dedup_by_gap([1.0, 2.0, 3.0], min_gap=0.0, cap=10) == [1.0, 2.0, 3.0]
 
 
 # Task 2.5: _cand_num / contact_sheet tests

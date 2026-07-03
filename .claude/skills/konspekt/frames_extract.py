@@ -32,13 +32,21 @@ def parse_showinfo_pts(stderr):
     return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
 
 def dedup_by_gap(timecodes, min_gap=3.0, cap=60):
+    """Deduplicate timecodes; cap=1 keeps the last frame as the final, most informative one."""
     kept = []
     for t in sorted(set(timecodes)):
         if not kept or t - kept[-1] >= min_gap:
             kept.append(t)
+    if cap <= 0:
+        return []
+    if len(kept) <= cap:
+        return kept
+    if cap == 1:
+        return [kept[-1]]
     if len(kept) > cap:
-        step = len(kept) / cap
-        kept = [kept[int(i * step)] for i in range(cap)]
+        last = len(kept) - 1
+        step = last / (cap - 1)
+        kept = [kept[round(i * step)] for i in range(cap)]
     return kept
 
 def download_video(url, out_dir, browser=None):
