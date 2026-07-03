@@ -138,10 +138,11 @@ def test_out_name_master_prefix(tmp_path):
     assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
 
 def test_out_name_frames_copy_suffix(tmp_path):
-    # Производная копия ветки кадров -> имя виджета БЕЗ суффикса _с_кадрами (инвариант спеки).
+    # Производная копия ветки кадров -> суффикс сохраняется в имени виджета,
+    # чтобы не перезаписывать обычный WIDGET_<Название>.html той же лекции.
     p = tmp_path / "MASTER_Урок 2_с_кадрами.md"
     p.write_text(_master(), encoding="utf-8")
-    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2.html"
+    assert md_parser.parse_master_md(str(p))['meta']['out'] == "WIDGET_Урок 2_с_кадрами.html"
 
 def test_out_name_legacy_suffix(tmp_path):
     # Легаси-курсы (OUT_*_мастер.md): сохраняем прежнее поведение — снимаем _мастер.
@@ -172,6 +173,13 @@ def test_render_image_missing_file(tmp_path):
     assert out == ''
 
 
+def test_render_image_pil_import_failure_degrades(tmp_path, monkeypatch):
+    # Отсутствие/поломка Pillow не должна валить всю сборку виджета - только эту картинку.
+    monkeypatch.setitem(sys.modules, 'PIL', None)
+    out = md_parser._render_image('Alt', 'whatever.png', tmp_path)
+    assert out == ''
+
+
 # --- Item 4: строка-картинка в _parse_text ---
 
 def test_parse_text_image_line(tmp_path):
@@ -183,6 +191,14 @@ def test_parse_text_image_line(tmp_path):
     assert '<figure' in body and 'data:image/' in body
     assert body.index('<p>Абзац до.</p>') < body.index('<figure')
     assert body.index('<figure') < body.index('<p>Абзац после.</p>')
+
+
+def test_parse_text_malformed_image_raises(tmp_path):
+    # Строка на "![" без закрывающей ")" не должна вешать парсер бесконечным циклом.
+    md = tmp_path / "MASTER_X.md"
+    md.write_text(_master("Абзац.\n\n![Слайд](cand_01.png\n\nАбзац после."), encoding="utf-8")
+    with pytest.raises(md_parser.MasterMDParseError):
+        md_parser.parse_master_md(str(md))
 
 
 # --- Item 5: figure.frame CSS в собранном HTML ---

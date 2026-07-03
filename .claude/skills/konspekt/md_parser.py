@@ -171,9 +171,8 @@ def _parse_meta(header, path):
     stem = Path(path).stem
     if stem.startswith('MASTER_'):
         core = stem[len('MASTER_'):]
-        # Производная копия ветки кадров MASTER_X_с_кадрами.md -> WIDGET_X.html
-        # (инвариант спеки: виджет без суффикса _с_кадрами).
-        core = re.sub(r'_с_кадрами$', '', core)
+        # Производная копия ветки кадров MASTER_X_с_кадрами.md -> WIDGET_X_с_кадрами.html:
+        # суффикс сохраняется, иначе сборка с кадрами перезаписывает обычный WIDGET_X.html.
         out = f"WIDGET_{core}.html"
     else:
         # Легаси-вход (курсы на OUT_*_мастер.md): сохраняем прежнее поведение.
@@ -526,9 +525,9 @@ IMG_MAX_WIDTH = 1280
 
 def _render_image(alt, src, base_dir):
     """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
-    from PIL import Image  # локальный импорт: обычный (без кадров) путь виджета не тянет Pillow
     path = Path(base_dir) / src
     try:
+        from PIL import Image  # локальный импорт: обычный (без кадров) путь виджета не тянет Pillow
         img = Image.open(path)
         img.load()
     except Exception as e:
@@ -636,8 +635,10 @@ def _parse_text(block, prompt_counter, base_dir):
             continue
 
         # Картинка-кадр: ![alt](src) на своей строке
-        m_img = re.match(r'^!\[(.*?)\]\((.+?)\)$', stripped)
-        if m_img:
+        if stripped.startswith('!['):
+            m_img = re.match(r'^!\[(.*?)\]\((.+?)\)$', stripped)
+            if not m_img:
+                raise MasterMDParseError(f"Некорректный синтаксис картинки: {stripped!r}")
             img_html = _render_image(m_img.group(1), m_img.group(2), base_dir)
             if img_html:
                 parts.append(img_html)
