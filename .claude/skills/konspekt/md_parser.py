@@ -169,8 +169,10 @@ def _parse_meta(header, path):
         title = f"{title} · {speaker}"
 
     stem = Path(path).stem
-    if stem.startswith('MASTER_'):
-        core = stem[len('MASTER_'):]
+    # Реальные мастер-файлы носят эмодзи-префикс (🧭📝MASTER_...) — снимаем его перед проверкой.
+    stem_no_emoji = re.sub(r'^\W+', '', stem)
+    if stem_no_emoji.startswith('MASTER_'):
+        core = stem_no_emoji[len('MASTER_'):]
         # Производная копия ветки кадров MASTER_X_с_кадрами.md -> WIDGET_X_с_кадрами.html:
         # суффикс сохраняется, иначе сборка с кадрами перезаписывает обычный WIDGET_X.html.
         out = f"WIDGET_{core}.html"

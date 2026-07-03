@@ -1,5 +1,6 @@
 """Извлечение кадров-кандидатов для opt-in ветки виджета /konspekt."""
 import argparse
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -155,9 +156,14 @@ def main():
     srt_text = Path(args.srt).read_text(encoding='utf-8')
     cands = build_candidates(video, srt_text, work_dir, threshold=args.threshold)
     sheet_path = contact_sheet([f for f, _ in cands], work_dir / 'contact_sheet.png')
+    manifest_path = work_dir / 'candidates.json'
+    manifest_path.write_text(
+        json.dumps([{'cand_id': _cand_num(f), 'timecode': t} for f, t in cands], ensure_ascii=False, indent=2),
+        encoding='utf-8')
 
     print(f'Кандидатов найдено: {len(cands)}')
     print(f'Contact-sheet: {sheet_path}')
+    print(f'Манифест: {manifest_path}')
 
     if args.dry_run:
         return

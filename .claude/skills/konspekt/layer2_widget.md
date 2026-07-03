@@ -181,6 +181,8 @@ PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/frames_extract.py" \
 
 Под капотом: `download_video` (yt-dlp, кэп 720p) скачивает видео во временную `frames_work/`; `scene_timecodes` (ffmpeg scene-detect + `showinfo`) объединяется с `cue_timecodes` (маркеры в транскрипте: «смотрите», «на слайде», «скопируйте» и т.п.); `dedup_by_gap` схлопывает близкие таймкоды (min-gap) и режет по cap (см. лимиты ниже); `extract_frame` вырезает по кадру на таймкод (`cand_0001.png`, `cand_0002.png`, …); `contact_sheet` (PIL) собирает пронумерованную простыню `contact_sheet.png`. Видео — временное, удаляется после нарезки; кадры-кандидаты кэшируются.
 
+Скрипт также пишет `frames_work/candidates.json` — список `{cand_id, timecode}` по всем кандидатам. Таймкоды нужны на Шаге 3 (relevant transcript excerpt по `cand_id`) и не восстановимы иначе — сам CLI печатает только счётчик и путь к простыне.
+
 *Примечание:* min-gap и cap в текущей версии скрипта не вынесены в CLI-флаги — используются дефолты функции `dedup_by_gap` (min_gap=3.0 с, cap=60), совпадающие со значением из таблицы лимитов.
 
 ### Шаг 2. Триаж по простыне (Codex → фолбэк Sonnet)
