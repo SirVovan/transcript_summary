@@ -118,14 +118,20 @@ def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=
     tcs = dedup_by_gap(scene_timecodes(video, threshold) + cue_timecodes(srt_text),
                        min_gap=min_gap, cap=cap)
     out = []
+    success_idx = 0
     for idx, t in enumerate(tcs, 1):
-        f = work / f'cand_{idx:04d}.png'
+        tmp = work / f'_tmp_{idx:04d}.png'
         try:
-            extract_frame(video, t, f)
+            extract_frame(video, t, tmp)
         except subprocess.CalledProcessError:
             # плохой таймкод (например, seek за конец видео) не рушит весь батч
+            if tmp.exists():
+                tmp.unlink()
             continue
-        if f.exists():
+        if tmp.exists():
+            success_idx += 1
+            f = work / f'cand_{success_idx:04d}.png'
+            tmp.replace(f)
             out.append((f, t))
     return out
 

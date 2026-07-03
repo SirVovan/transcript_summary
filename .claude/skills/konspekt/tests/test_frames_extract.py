@@ -95,6 +95,26 @@ def test_contact_sheet_builds(tmp_path):
     assert im.width == 2 * 100          # cols * thumb_w
 
 
+def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda video, threshold: [1.0, 2.0, 3.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda srt_text: [])
+
+    def fake_extract_frame(video, t, out):
+        calls.append(t)
+        if len(calls) == 2:
+            raise frames_extract.subprocess.CalledProcessError(1, ['ffmpeg'])
+        _png(out)
+
+    monkeypatch.setattr(frames_extract, 'extract_frame', fake_extract_frame)
+
+    frames = frames_extract.build_candidates('video.mp4', '', tmp_path, min_gap=0.0)
+
+    assert [f.name for f, _ in frames] == ['cand_0001.png', 'cand_0002.png']
+    assert [t for _, t in frames] == [1.0, 3.0]
+
+
 # Task 2.6: codex_available tests
 def test_codex_available_true(monkeypatch):
     class R: returncode = 0
