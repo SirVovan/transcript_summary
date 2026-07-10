@@ -15,6 +15,38 @@ def _srt_time_to_sec(t):
     s, ms = rest.split(',')
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
 
+class SegmentBoundsError(ValueError):
+    """Мастер-MD не удовлетворяет контракту границ сегментов."""
+
+_SEG_HEADER = re.compile(
+    r'##\s+Сегмент\s+\d+\s*\|\s*([\d:]+)\s*[–-]\s*([\d:]+)\s*\|')
+
+def _hms_to_sec(s):
+    sec = 0
+    for p in s.strip().split(':'):
+        sec = sec * 60 + int(p)
+    return float(sec)
+
+def segment_bounds(master_md_text):
+    bounds = []
+    for i, m in enumerate(_SEG_HEADER.finditer(master_md_text), 1):
+        bounds.append({'id': f'{i:02d}',
+                       'start': _hms_to_sec(m.group(1)),
+                       'end': _hms_to_sec(m.group(2))})
+    if not bounds:
+        raise SegmentBoundsError(
+            'в мастер-MD не найден ни один заголовок '
+            '"## Сегмент N | HH:MM:SS-HH:MM:SS | ..." — границы сегментов обязательны')
+    for b in bounds:
+        if not b['start'] < b['end']:
+            raise SegmentBoundsError(
+                f"сегмент {b['id']}: пустой/обратный диапазон {b['start']}–{b['end']}")
+    for cur, nxt in zip(bounds, bounds[1:]):
+        if nxt['start'] < cur['end']:
+            raise SegmentBoundsError(
+                f"сегменты {cur['id']} и {nxt['id']} пересекаются")
+    return bounds
+
 def cue_timecodes(srt_text):
     out = []
     blocks = re.split(r'\n\s*\n', srt_text.strip())

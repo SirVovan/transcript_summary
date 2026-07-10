@@ -3,6 +3,8 @@
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import cookies_spec
 import frames_extract
@@ -113,6 +115,42 @@ def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monke
 
     assert [f.name for f, _ in frames] == ['cand_0001.png', 'cand_0002.png']
     assert [t for _, t in frames] == [1.0, 3.0]
+
+
+# Phase 1 Task 1.1: segment_bounds tests
+_MD_TWO_SEG = (
+    "# Название\n\n---\n\n"
+    "## Сегмент 1 | 00:00:00-00:01:30 | Первый\n\n**Тип:** идея\n\n"
+    "## Сегмент 2 | 00:01:30–00:03:00 | Второй\n\n**Тип:** идея\n"  # en-dash во втором
+)
+
+
+def test_segment_bounds_parses_ranges():
+    b = frames_extract.segment_bounds(_MD_TWO_SEG)
+    assert b == [
+        {'id': '01', 'start': 0.0, 'end': 90.0},
+        {'id': '02', 'start': 90.0, 'end': 180.0},
+    ]
+
+
+def test_segment_bounds_empty_raises():
+    with pytest.raises(frames_extract.SegmentBoundsError):
+        frames_extract.segment_bounds("# Название\n\nтекст без сегментов\n")
+
+
+def test_segment_bounds_overlap_raises():
+    md = (
+        "## Сегмент 1 | 00:00:00-00:02:00 | A\n\n"
+        "## Сегмент 2 | 00:01:00-00:03:00 | B\n"
+    )
+    with pytest.raises(frames_extract.SegmentBoundsError):
+        frames_extract.segment_bounds(md)
+
+
+def test_segment_bounds_reversed_range_raises():
+    md = "## Сегмент 1 | 00:02:00-00:01:00 | A\n"
+    with pytest.raises(frames_extract.SegmentBoundsError):
+        frames_extract.segment_bounds(md)
 
 
 # Task 2.6: codex_available tests
