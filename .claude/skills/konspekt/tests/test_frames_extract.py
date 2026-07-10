@@ -153,6 +153,31 @@ def test_segment_bounds_reversed_range_raises():
         frames_extract.segment_bounds(md)
 
 
+# Phase 1 Task 1.2: assign_segment tests
+_BOUNDS = [
+    {'id': '01', 'start': 0.0, 'end': 90.0},
+    {'id': '02', 'start': 100.0, 'end': 180.0},   # щель 90..100
+]
+
+
+def test_assign_before_first():
+    assert frames_extract.assign_segment(-5.0, _BOUNDS) == '01'
+
+
+def test_assign_after_last():
+    assert frames_extract.assign_segment(999.0, _BOUNDS) == '02'
+
+
+def test_assign_inside():
+    assert frames_extract.assign_segment(50.0, _BOUNDS) == '01'
+    assert frames_extract.assign_segment(150.0, _BOUNDS) == '02'
+
+
+def test_assign_gap_nearest_boundary():
+    assert frames_extract.assign_segment(92.0, _BOUNDS) == '01'   # ближе к end 90
+    assert frames_extract.assign_segment(98.0, _BOUNDS) == '02'   # ближе к start 100
+
+
 # Task 2.6: codex_available tests
 def test_codex_available_true(monkeypatch):
     class R: returncode = 0

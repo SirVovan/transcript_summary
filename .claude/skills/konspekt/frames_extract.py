@@ -47,6 +47,20 @@ def segment_bounds(master_md_text):
                 f"сегменты {cur['id']} и {nxt['id']} пересекаются")
     return bounds
 
+def assign_segment(timecode, bounds):
+    first, last = bounds[0], bounds[-1]
+    if timecode < first['start']:
+        return first['id']
+    if timecode >= last['end']:
+        return last['id']
+    for b in bounds:
+        if b['start'] <= timecode < b['end']:
+            return b['id']
+    # в щели между сегментами — сегмент с ближайшей границей
+    return min(bounds,
+               key=lambda b: min(abs(timecode - b['start']),
+                                 abs(timecode - b['end'])))['id']
+
 def cue_timecodes(srt_text):
     out = []
     blocks = re.split(r'\n\s*\n', srt_text.strip())
