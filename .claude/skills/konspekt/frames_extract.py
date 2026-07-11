@@ -61,6 +61,20 @@ def assign_segment(timecode, bounds):
                key=lambda b: min(abs(timecode - b['start']),
                                  abs(timecode - b['end'])))['id']
 
+def average_hash(img):
+    from PIL import Image
+    im = img if isinstance(img, Image.Image) else Image.open(img)
+    im = im.convert('L').resize((8, 8))
+    px = list(im.getdata())
+    avg = sum(px) / len(px)
+    bits = 0
+    for p in px:
+        bits = (bits << 1) | (1 if p >= avg else 0)
+    return bits
+
+def hamming(a, b):
+    return bin(a ^ b).count('1')
+
 def cue_timecodes(srt_text):
     out = []
     blocks = re.split(r'\n\s*\n', srt_text.strip())

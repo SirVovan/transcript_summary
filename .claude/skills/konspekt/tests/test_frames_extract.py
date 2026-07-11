@@ -189,3 +189,21 @@ def test_codex_available_false(monkeypatch):
     def boom(*a, **k): raise FileNotFoundError()
     monkeypatch.setattr(frames_extract.subprocess, 'run', boom)
     assert frames_extract.codex_available() is False
+
+
+def test_average_hash_identical(tmp_path):
+    a = tmp_path / "a.png"; b = tmp_path / "b.png"
+    _png(a, color=(30, 30, 30)); _png(b, color=(30, 30, 30))
+    assert frames_extract.hamming(frames_extract.average_hash(a),
+                                  frames_extract.average_hash(b)) == 0
+
+
+def test_average_hash_differs_for_gradient(tmp_path):
+    from PIL import Image
+    a = tmp_path / "a.png"; b = tmp_path / "b.png"
+    Image.new("RGB", (64, 64), (0, 0, 0)).save(a)
+    grad = Image.new("L", (64, 64))
+    grad.putdata([(x * 4) % 256 for x in range(64) for _ in range(64)])
+    grad.convert("RGB").save(b)
+    assert frames_extract.hamming(frames_extract.average_hash(a),
+                                  frames_extract.average_hash(b)) > 0
