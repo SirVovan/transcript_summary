@@ -100,6 +100,23 @@ def cue_timecodes(srt_text):
             out.append(_srt_time_to_sec(start))
     return sorted(set(out))
 
+MARKER_TRIGGERS = ['скринь', 'зафиксируй', 'сохрани этот']
+
+def marker_timecodes(srt_text):
+    out = {}
+    blocks = re.split(r'\n\s*\n', srt_text.strip())
+    for b in blocks:
+        lines = b.splitlines()
+        tc_line = next((l for l in lines if '-->' in l), None)
+        if not tc_line:
+            continue
+        raw = ' '.join(l for l in lines
+                       if '-->' not in l and not l.strip().isdigit()).strip()
+        if any(mk in raw.lower() for mk in MARKER_TRIGGERS):
+            t = _srt_time_to_sec(tc_line.split('-->')[0].strip())
+            out.setdefault(t, raw)
+    return [{'timecode': t, 'phrase': out[t]} for t in sorted(out)]
+
 def parse_showinfo_pts(stderr):
     return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
 

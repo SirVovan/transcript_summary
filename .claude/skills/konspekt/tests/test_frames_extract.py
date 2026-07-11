@@ -384,3 +384,21 @@ def test_schema_has_no_segment_hint():
     assert 'segment_hint' not in props
     assert 'segment_hint' not in required
     assert 'cand_id' in props and 'cand_id' in required
+
+
+# Task 1.1: marker_timecodes tests
+_SRT_MARKERS = (
+    "1\n00:00:10,000 --> 00:00:12,000\nЗаскриньте этот слайд, пожалуйста\n\n"
+    "2\n00:00:20,000 --> 00:00:22,000\nПросто рассказываю без маркера\n\n"
+    "3\n00:00:30,000 --> 00:00:32,000\nЗафиксируйте формулу\n"
+)
+
+def test_marker_timecodes_narrow_list():
+    res = frames_extract.marker_timecodes(_SRT_MARKERS)
+    assert [r['timecode'] for r in res] == [10.0, 30.0]
+    assert 'аскриньте' in res[0]['phrase']
+
+def test_marker_timecodes_ignores_broad_cues():
+    # «смотрите/на экране» — старые CUE_MARKERS, но НЕ маркеры-гарантия
+    srt = "1\n00:00:05,000 --> 00:00:07,000\nСмотрите на экране\n"
+    assert frames_extract.marker_timecodes(srt) == []
