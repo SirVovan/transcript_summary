@@ -253,6 +253,27 @@ def select_frames(triage, candidates, cap):
     selected.extend(dict(s, phase='budget') for s in rest[:max(0, budget)])
     return selected
 
+def trim_to_weight(selection, size_by_cand, limit_bytes):
+    kept = list(selection)
+
+    def total():
+        return sum(size_by_cand.get(s['cand_id'], 0) for s in kept)
+
+    for s in sorted((s for s in kept if s['phase'] == 'budget'),
+                    key=lambda s: s['confidence']):
+        if total() <= limit_bytes:
+            break
+        kept.remove(s)
+    lost = []
+    if total() > limit_bytes:
+        for s in sorted((s for s in kept if s['phase'] == 'mandatory'),
+                        key=lambda s: s['confidence']):
+            if total() <= limit_bytes:
+                break
+            kept.remove(s)
+            lost.append(s['segment_id'])
+    return kept, lost
+
 def _cmd_extract(args):
     work_dir = Path(args.work_dir)
     video = download_video(args.url, work_dir) if args.url else Path(args.video)

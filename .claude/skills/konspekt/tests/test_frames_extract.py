@@ -326,3 +326,31 @@ def test_select_frames_drops_and_unknown_ignored():
         {'cand_id': 2, 'type': 'slide-text', 'confidence': 0.9},
     ]
     assert frames_extract.select_frames(triage, cands, cap=12) == []
+
+
+# Task 4.2: trim_to_weight tests
+def test_trim_to_weight_drops_budget_first():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.8, 'phase': 'budget'},
+        {'cand_id': 3, 'segment_id': '01', 'confidence': 0.2, 'phase': 'budget'},
+    ]
+    size = {1: 4, 2: 4, 3: 4}
+    kept, lost = frames_extract.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {1, 2}    # выбит бюджетный с меньшим conf (3)
+    assert lost == []                                # обязательный не тронут
+
+def test_trim_to_weight_degrades_mandatory_last():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.1, 'phase': 'mandatory'},
+    ]
+    size = {1: 6, 2: 6}
+    kept, lost = frames_extract.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {1}       # оставлен более уверенный
+    assert lost == ['02']
+
+def test_trim_to_weight_noop_when_fits():
+    sel = [{'cand_id': 1, 'segment_id': '01', 'confidence': 0.5, 'phase': 'mandatory'}]
+    kept, lost = frames_extract.trim_to_weight(sel, {1: 3}, limit_bytes=8)
+    assert kept == sel and lost == []
