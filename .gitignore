@@ -38,3 +38,9 @@ journal/
 
 # Рабочая папка ветки кадров виджета (видео, кадры-кандидаты, contact-sheet) — продукты, не в репо
 frames_work/
+
+# Прочие рабочие temp-папки (черновики сверки виджета, тесты, кэши инструментов)
+.tmp_check/
+.tmp_widget_test/
+.superpowers/
+.pytest_cache/
