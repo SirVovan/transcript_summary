@@ -402,3 +402,24 @@ def test_marker_timecodes_ignores_broad_cues():
     # «смотрите/на экране» — старые CUE_MARKERS, но НЕ маркеры-гарантия
     srt = "1\n00:00:05,000 --> 00:00:07,000\nСмотрите на экране\n"
     assert frames_extract.marker_timecodes(srt) == []
+
+
+# Task 1.2: expand_marker_window tests
+def test_expand_marker_window_series():
+    scenes = [12.0, 25.0, 40.0, 55.0, 70.0, 130.0]   # 130 вне окна
+    res = frames_extract.expand_marker_window(10.0, scenes, window_end=110.0,
+                                              window_frames=5)
+    assert res[0] == 10.0
+    assert 130.0 not in res
+    assert res == sorted(set(res)) and len(res) <= 5
+
+
+def test_expand_marker_window_caps():
+    scenes = [float(x) for x in range(11, 60)]       # много кадров
+    res = frames_extract.expand_marker_window(10.0, scenes, window_end=100.0,
+                                              window_frames=3)
+    assert len(res) == 3 and res[0] == 10.0
+
+
+def test_expand_marker_window_anchor_only():
+    assert frames_extract.expand_marker_window(10.0, [200.0], window_end=100.0) == [10.0]

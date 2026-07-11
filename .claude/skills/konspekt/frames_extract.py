@@ -117,6 +117,16 @@ def marker_timecodes(srt_text):
             out.setdefault(t, raw)
     return [{'timecode': t, 'phrase': out[t]} for t in sorted(out)]
 
+def expand_marker_window(anchor, scene_tcs, window_end, window_frames=5):
+    inside = sorted(t for t in set(scene_tcs) if anchor < t <= window_end)
+    extra = window_frames - 1
+    if len(inside) > extra > 0:
+        step = (len(inside) - 1) / (extra - 1) if extra > 1 else len(inside)
+        inside = [inside[round(i * step)] for i in range(extra)] if extra > 1 else [inside[-1]]
+    elif extra <= 0:
+        inside = []
+    return sorted(set([anchor, *inside]))
+
 def parse_showinfo_pts(stderr):
     return [float(m) for m in re.findall(r'pts_time:([0-9.]+)', stderr)]
 
