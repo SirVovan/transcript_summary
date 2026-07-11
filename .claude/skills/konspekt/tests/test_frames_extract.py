@@ -354,3 +354,20 @@ def test_trim_to_weight_noop_when_fits():
     sel = [{'cand_id': 1, 'segment_id': '01', 'confidence': 0.5, 'phase': 'mandatory'}]
     kept, lost = frames_extract.trim_to_weight(sel, {1: 3}, limit_bytes=8)
     assert kept == sel and lost == []
+
+
+# Task 4.3: segment_report tests
+def test_segment_report_counts():
+    bounds = [{'id': '01', 'start': 0.0, 'end': 100.0},
+              {'id': '02', 'start': 100.0, 'end': 200.0}]
+    cands = [{'cand_id': 1, 'segment_id': '01'}, {'cand_id': 2, 'segment_id': '01'},
+             {'cand_id': 3, 'segment_id': '02'}]
+    triage = [{'cand_id': 1, 'type': 'slide-text', 'confidence': 0.9},
+              {'cand_id': 2, 'type': 'drop', 'confidence': 0.1},
+              {'cand_id': 3, 'type': 'drop', 'confidence': 0.2}]
+    selection = [{'cand_id': 1, 'segment_id': '01', 'phase': 'mandatory'}]
+    rows = frames_extract.segment_report(bounds, cands, triage, selection)
+    assert rows == [
+        {'segment_id': '01', 'candidates': 2, 'triage_pass': 1, 'inserted': 1},
+        {'segment_id': '02', 'candidates': 1, 'triage_pass': 0, 'inserted': 0},
+    ]

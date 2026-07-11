@@ -274,6 +274,35 @@ def trim_to_weight(selection, size_by_cand, limit_bytes):
             lost.append(s['segment_id'])
     return kept, lost
 
+def segment_report(bounds, candidates, triage, selection):
+    triage_by = {t['cand_id']: t for t in triage}
+    rows = []
+    for b in bounds:
+        sid = b['id']
+        cand_ids = [c['cand_id'] for c in candidates if c['segment_id'] == sid]
+        passed = sum(1 for cid in cand_ids
+                     if triage_by.get(cid, {}).get('type', 'drop') != 'drop')
+        inserted = sum(1 for s in selection if s['segment_id'] == sid)
+        rows.append({'segment_id': sid, 'candidates': len(cand_ids),
+                     'triage_pass': passed, 'inserted': inserted})
+    return rows
+
+def _cmd_select(args):
+    cands = json.loads(Path(args.candidates).read_text(encoding='utf-8'))
+    triage = json.loads(Path(args.triage).read_text(encoding='utf-8'))
+    if isinstance(triage, dict) and 'frames' in triage:
+        triage = triage['frames']
+    bounds = segment_bounds(Path(args.master_md).read_text(encoding='utf-8'))
+    cap = adaptive_cap(len(bounds))
+    selection = select_frames(triage, cands, cap)
+    Path(args.out).write_text(
+        json.dumps(selection, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'Отобрано кадров: {len(selection)} (адаптивный потолок {cap})')
+    print('Сегмент | Кандидатов | Прошло триаж | Вставлено')
+    for r in segment_report(bounds, cands, triage, selection):
+        print(f"{r['segment_id']:>7} | {r['candidates']:>10} | "
+              f"{r['triage_pass']:>12} | {r['inserted']:>9}")
+
 def _cmd_extract(args):
     work_dir = Path(args.work_dir)
     video = download_video(args.url, work_dir) if args.url else Path(args.video)
@@ -304,6 +333,13 @@ def main():
     ex.add_argument('--work-dir', required=True, help='папка для кадров и простыни')
     ex.add_argument('--threshold', type=float, default=0.2, help='порог scene-detect')
     ex.set_defaults(func=_cmd_extract)
+
+    sl = sub.add_parser('select', help='join триажа с candidates.json -> shortlist')
+    sl.add_argument('--candidates', required=True, help='candidates.json из extract')
+    sl.add_argument('--triage', required=True, help='JSON триажа (Шаг 2)')
+    sl.add_argument('--master-md', required=True, help='мастер-MD (число сегментов)')
+    sl.add_argument('--out', required=True, help='куда записать shortlist.json')
+    sl.set_defaults(func=_cmd_select)
 
     args = parser.parse_args()
     args.func(args)
