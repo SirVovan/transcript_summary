@@ -11,10 +11,9 @@
           "type": {"type": "string", "enum": ["prompt", "slide-text", "illustration", "drop"]},
           "text": {"type": ["string", "null"]},
           "caption": {"type": ["string", "null"]},
-          "segment_hint": {"type": ["string", "null"]},
           "confidence": {"type": "number"}
         },
-        "required": ["cand_id", "timecode", "type", "text", "caption", "segment_hint", "confidence"],
+        "required": ["cand_id", "timecode", "type", "text", "caption", "confidence"],
         "additionalProperties": false
       }
     }

@@ -371,3 +371,16 @@ def test_segment_report_counts():
         {'segment_id': '01', 'candidates': 2, 'triage_pass': 1, 'inserted': 1},
         {'segment_id': '02', 'candidates': 1, 'triage_pass': 0, 'inserted': 0},
     ]
+
+
+# Task 5.1: frames_schema без segment_hint
+import json as _json
+
+def test_schema_has_no_segment_hint():
+    schema_path = Path(__file__).resolve().parents[1] / 'frames_schema.json'
+    schema = _json.loads(schema_path.read_text(encoding='utf-8'))
+    props = schema['properties']['frames']['items']['properties']
+    required = schema['properties']['frames']['items']['required']
+    assert 'segment_hint' not in props
+    assert 'segment_hint' not in required
+    assert 'cand_id' in props and 'cand_id' in required
