@@ -301,7 +301,8 @@ PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/widget_generator.py" \
 | 1a. scene-detection | Python (ffmpeg) | — | нет модели |
 | 1b. transcript-cues | Python regex (или Haiku) | Haiku (актуальный) | простой паттерн, дёшево |
 | 2. Contact-sheet | Python (ffmpeg tile) | — | нет модели |
-| 3. Триаж по простыне | Codex → (фолбэк) субагент | Codex → Sonnet (актуальный) | отбор мини-кадров; vision вне Claude-бюджета |
+| 3. Триаж по простыне | Codex → (фолбэк) субагент | Codex → Sonnet (актуальный) | скорит всех кандидатов; vision вне Claude-бюджета |
+| 3.5. Отбор shortlist | Python (`select`) | — | детерминированный двухфазный отбор + гарантия покрытия; без модели |
 | 4. Full-res разбор | Codex → (фолбэк) субагент | Codex → Sonnet (актуальный) + политика уверенности | распознавание/классификация; JSON по схеме |
 | 5. Вставка в копию MD | Главный агент | Opus (актуальный) | привязка кадр→сегмент и связность — качество-критично |
 | 6. Сборка виджета | Python | — | нет модели |
