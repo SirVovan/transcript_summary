@@ -536,11 +536,9 @@ def _encode_frame_b64(path):
         h = round(img.height * IMG_MAX_WIDTH / img.width)
         img = img.resize((IMG_MAX_WIDTH, h))
     buf = io.BytesIO()
-    if img.mode in ('RGBA', 'LA', 'P'):
-        img.convert('RGBA').save(buf, format='PNG', optimize=True); mime = 'image/png'
-    else:
-        img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True); mime = 'image/jpeg'
-    return mime, base64.b64encode(buf.getvalue()).decode('ascii')
+    mode = 'RGBA' if img.mode in ('RGBA', 'LA', 'P') else 'RGB'
+    img.convert(mode).save(buf, format='WEBP', quality=82, method=6)
+    return 'image/webp', base64.b64encode(buf.getvalue()).decode('ascii')
 
 def _render_image(alt, src, base_dir):
     """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""

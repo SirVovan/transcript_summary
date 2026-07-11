@@ -1,6 +1,7 @@
 import pytest
 import os
 import sys
+import base64
 from pathlib import Path
 from PIL import Image
 
@@ -157,12 +158,21 @@ def _make_png(path, size=(40, 20), color=(10, 20, 30)):
     Image.new("RGB", size, color).save(path)
 
 
+def test_encode_frame_webp(tmp_path):
+    p = tmp_path / "cand_0001.png"
+    Image.new("RGB", (100, 60), (120, 30, 30)).save(p)
+    mime, b64 = md_parser._encode_frame_b64(p)
+    assert mime == "image/webp"
+    raw = base64.b64decode(b64)
+    assert raw[:4] == b"RIFF" and raw[8:12] == b"WEBP"
+
+
 def test_render_image_embeds_base64(tmp_path):
     _make_png(tmp_path / "f.png")
     # alt с кавычкой, <, & — идёт в атрибут alt="...", кавычки обязаны экранироваться
     out = md_parser._render_image('Слайд "12" <b>&', 'f.png', tmp_path)
     assert out.startswith('<figure')
-    assert 'data:image/jpeg;base64,' in out
+    assert 'data:image/webp;base64,' in out
     assert '<figcaption>' in out
     assert '&lt;b&gt;' in out and '&amp;' in out and '&quot;' in out
     assert '<b>' not in out
@@ -210,7 +220,7 @@ def test_build_html_with_frame(tmp_path):
     data = md_parser.parse_master_md(str(md))
     out_html = widget_generator.build_html(data)
     assert 'figure.frame' in out_html          # CSS присутствует
-    assert 'data:image/jpeg;base64,' in out_html
+    assert 'data:image/webp;base64,' in out_html
 
 
 # --- Task 4.4: control_weight / frame_weights / data-cand ---
