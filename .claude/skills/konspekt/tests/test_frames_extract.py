@@ -472,3 +472,16 @@ def test_segment_transcript_splits_by_bounds():
     res = frames_extract.segment_transcript(srt, bounds)
     assert 'Первый' in res['01'] and 'Второй' not in res['01']
     assert 'Второй' in res['02']
+
+
+# Task 3.2: batch_segments tests
+def test_batch_segments_contiguous_le3():
+    assert frames_extract.batch_segments(['01', '02', '03']) == [['01'], ['02'], ['03']]
+    r = frames_extract.batch_segments(['01', '02', '03', '04', '05', '06', '07'])
+    assert len(r) == 3
+    assert [x for grp in r for x in grp] == ['01','02','03','04','05','06','07']  # порядок цел
+    assert all(grp == sorted(grp) for grp in r)                                    # смежность
+
+
+def test_batch_segments_single():
+    assert frames_extract.batch_segments(['01']) == [['01']]

@@ -386,6 +386,19 @@ def _cmd_extract(args):
     print(f'Contact-sheet: {sheet_path} (+ посегментные contact_sheet_seg*.png)')
     print(f'Манифест: {manifest_path}')
 
+def batch_segments(segment_ids, max_batches=3):
+    """Группирует segment_ids в ≤max_batches смежные пачки.
+
+    Сохраняет порядок (смежность), делит на не более max_batches почти равных подряд-групп.
+    При len(segment_ids) <= max_batches — по одному id в группе.
+    """
+    n = len(segment_ids)
+    if n == 0:
+        return []
+    k = min(max_batches, n)
+    size = (n + k - 1) // k
+    return [segment_ids[i:i + size] for i in range(0, n, size)]
+
 def main():
     parser = argparse.ArgumentParser(description='Кадры-кандидаты для виджета /konspekt.')
     sub = parser.add_subparsers(dest='cmd', required=True)
