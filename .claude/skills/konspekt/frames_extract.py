@@ -202,18 +202,21 @@ def codex_available():
     except Exception:
         return False
 
-def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=60):
+def build_candidates(video, srt_text, master_md_text, work_dir,
+                     threshold=0.2, min_gap=3.0, per_segment_cap=10,
+                     global_cap=150, phash_threshold=6):
     work = Path(work_dir); work.mkdir(parents=True, exist_ok=True)
-    tcs = dedup_by_gap(scene_timecodes(video, threshold) + cue_timecodes(srt_text),
-                       min_gap=min_gap, cap=cap)
-    out = []
+    bounds = segment_bounds(master_md_text)
+    tagged, final_cap = bucket_timecodes(
+        scene_timecodes(video, threshold), cue_timecodes(srt_text), bounds,
+        min_gap=min_gap, per_segment_cap=per_segment_cap, global_cap=global_cap)
+    raw = []
     success_idx = 0
-    for idx, t in enumerate(tcs, 1):
-        tmp = work / f'_tmp_{idx:04d}.png'
+    for tc, sid in tagged:
+        tmp = work / f'_tmp_{success_idx + 1:04d}.png'
         try:
-            extract_frame(video, t, tmp)
+            extract_frame(video, tc, tmp)
         except subprocess.CalledProcessError:
-            # плохой таймкод (например, seek за конец видео) не рушит весь батч
             if tmp.exists():
                 tmp.unlink()
             continue
@@ -221,40 +224,42 @@ def build_candidates(video, srt_text, work_dir, threshold=0.3, min_gap=3.0, cap=
             success_idx += 1
             f = work / f'cand_{success_idx:04d}.png'
             tmp.replace(f)
-            out.append((f, t))
-    return out
+            raw.append((f, tc, sid))
+    return phash_dedup(raw, threshold=phash_threshold), final_cap
 
-def main():
-    parser = argparse.ArgumentParser(description='Извлечение кадров-кандидатов для виджета /konspekt.')
-    src = parser.add_mutually_exclusive_group(required=True)
-    src.add_argument('--url', help='YouTube URL для скачивания видео')
-    src.add_argument('--video', help='путь к локальному видеофайлу')
-    parser.add_argument('--srt', required=True, help='путь к .srt транскрипту')
-    parser.add_argument('--work-dir', required=True, help='рабочая папка для кадров и простыни')
-    parser.add_argument('--threshold', type=float, default=0.3, help='порог scene-detect ffmpeg')
-    parser.add_argument('--dry-run', action='store_true', help='остановиться после сборки простыни')
-    args = parser.parse_args()
-
+def _cmd_extract(args):
     work_dir = Path(args.work_dir)
-    if args.url:
-        video = download_video(args.url, work_dir)
-    else:
-        video = Path(args.video)
-
+    video = download_video(args.url, work_dir) if args.url else Path(args.video)
     srt_text = Path(args.srt).read_text(encoding='utf-8')
-    cands = build_candidates(video, srt_text, work_dir, threshold=args.threshold)
-    sheet_path = contact_sheet([f for f, _ in cands], work_dir / 'contact_sheet.png')
+    master_md_text = Path(args.master_md).read_text(encoding='utf-8')
+    cands, final_cap = build_candidates(video, srt_text, master_md_text, work_dir,
+                                        threshold=args.threshold)
+    sheet_path = contact_sheet([f for f, _, _ in cands], work_dir / 'contact_sheet.png')
     manifest_path = work_dir / 'candidates.json'
     manifest_path.write_text(
-        json.dumps([{'cand_id': _cand_num(f), 'timecode': t} for f, t in cands], ensure_ascii=False, indent=2),
+        json.dumps([{'cand_id': _cand_num(f), 'timecode': t, 'segment_id': sid}
+                    for f, t, sid in cands], ensure_ascii=False, indent=2),
         encoding='utf-8')
-
-    print(f'Кандидатов найдено: {len(cands)}')
+    print(f'Кандидатов найдено: {len(cands)} (cap на бакет: {final_cap})')
     print(f'Contact-sheet: {sheet_path}')
     print(f'Манифест: {manifest_path}')
 
-    if args.dry_run:
-        return
+def main():
+    parser = argparse.ArgumentParser(description='Кадры-кандидаты для виджета /konspekt.')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+
+    ex = sub.add_parser('extract', help='кандидаты + contact-sheet + candidates.json')
+    src = ex.add_mutually_exclusive_group(required=True)
+    src.add_argument('--url', help='YouTube URL')
+    src.add_argument('--video', help='путь к локальному видео')
+    ex.add_argument('--srt', required=True, help='путь к .srt транскрипту')
+    ex.add_argument('--master-md', required=True, help='путь к мастер-MD (границы сегментов)')
+    ex.add_argument('--work-dir', required=True, help='папка для кадров и простыни')
+    ex.add_argument('--threshold', type=float, default=0.2, help='порог scene-detect')
+    ex.set_defaults(func=_cmd_extract)
+
+    args = parser.parse_args()
+    args.func(args)
 
 if __name__ == '__main__':
     main()

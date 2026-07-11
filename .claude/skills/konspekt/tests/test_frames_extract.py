@@ -99,9 +99,11 @@ def test_contact_sheet_builds(tmp_path):
 
 def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monkeypatch):
     calls = []
-
-    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda video, threshold: [1.0, 2.0, 3.0])
-    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda srt_text: [])
+    md = ("## Сегмент 1 | 00:00:00-00:01:00 | A\n\n"
+          "## Сегмент 2 | 00:01:00-00:02:00 | B\n")
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda v, threshold: [1.0, 2.0, 65.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
 
     def fake_extract_frame(video, t, out):
         calls.append(t)
@@ -111,10 +113,11 @@ def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monke
 
     monkeypatch.setattr(frames_extract, 'extract_frame', fake_extract_frame)
 
-    frames = frames_extract.build_candidates('video.mp4', '', tmp_path, min_gap=0.0)
+    frames, cap = frames_extract.build_candidates('video.mp4', '', md, tmp_path, min_gap=0.0)
 
-    assert [f.name for f, _ in frames] == ['cand_0001.png', 'cand_0002.png']
-    assert [t for _, t in frames] == [1.0, 3.0]
+    assert [f.name for f, _, _ in frames] == ['cand_0001.png', 'cand_0002.png']
+    assert [t for _, t, _ in frames] == [1.0, 65.0]
+    assert [sid for _, _, sid in frames] == ['01', '02']    # привязка к сегментам
 
 
 # Phase 1 Task 1.1: segment_bounds tests
