@@ -371,6 +371,28 @@ def test_trim_to_weight_noop_when_fits():
     kept, lost = frames_extract.trim_to_weight(sel, {1: 3}, limit_bytes=8)
     assert kept == sel and lost == []
 
+def test_trim_drops_marker_last():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.2, 'phase': 'marker'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 3, 'segment_id': '01', 'confidence': 0.9, 'phase': 'budget'},
+    ]
+    size = {1: 6, 2: 6, 3: 6}
+    kept, lost = frames_extract.trim_to_weight(sel, size, limit_bytes=8)
+    # выбиты budget(3) и mandatory(2); marker(1) выжил, хоть и conf ниже
+    assert {s['cand_id'] for s in kept} == {1}
+    assert lost == ['01']   # потерян mandatory сегмента 01
+
+def test_trim_degrades_marker_only_when_forced():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.1, 'phase': 'marker'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.9, 'phase': 'marker'},
+    ]
+    size = {1: 6, 2: 6}
+    kept, lost = frames_extract.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {2}   # оставлен более уверенный маркер
+    assert lost == ['01']
+
 
 # Task 4.3: segment_report tests
 def test_segment_report_counts():

@@ -308,19 +308,15 @@ def trim_to_weight(selection, size_by_cand, limit_bytes):
     def total():
         return sum(size_by_cand.get(s['cand_id'], 0) for s in kept)
 
-    for s in sorted((s for s in kept if s['phase'] == 'budget'),
-                    key=lambda s: s['confidence']):
-        if total() <= limit_bytes:
-            break
-        kept.remove(s)
     lost = []
-    if total() > limit_bytes:
-        for s in sorted((s for s in kept if s['phase'] == 'mandatory'),
+    for phase in ('budget', 'mandatory', 'marker'):
+        for s in sorted((s for s in kept if s['phase'] == phase),
                         key=lambda s: s['confidence']):
             if total() <= limit_bytes:
                 break
             kept.remove(s)
-            lost.append(s['segment_id'])
+            if phase in ('mandatory', 'marker'):
+                lost.append(s['segment_id'])
     return kept, lost
 
 def segment_report(bounds, candidates, triage, selection):
