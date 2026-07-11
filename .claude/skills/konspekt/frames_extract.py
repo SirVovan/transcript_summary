@@ -231,28 +231,50 @@ def codex_available():
 
 def build_candidates(video, srt_text, master_md_text, work_dir,
                      threshold=0.2, min_gap=3.0, per_segment_cap=10,
-                     global_cap=150, phash_threshold=6):
+                     global_cap=150, phash_threshold=6,
+                     marker_window_sec=100.0, marker_window_frames=5):
     work = Path(work_dir); work.mkdir(parents=True, exist_ok=True)
     bounds = segment_bounds(master_md_text)
+    scenes = scene_timecodes(video, threshold)
+    # обычные (scene+cue) — через дедуп/кап
     tagged, final_cap = bucket_timecodes(
-        scene_timecodes(video, threshold), cue_timecodes(srt_text), bounds,
+        scenes, cue_timecodes(srt_text), bounds,
         min_gap=min_gap, per_segment_cap=per_segment_cap, global_cap=global_cap)
-    raw = []
+    normal = [(t, sid, False, '') for t, sid in tagged]
+    # маркеры — вне дедупа/капа, с окном серии
+    markers = marker_timecodes(srt_text)
+    anchors = [m['timecode'] for m in markers]
+    marker_items = []
+    seen_marker_tc = set()   # дедуп на стыке окон соседних маркеров (finding 6)
+    for i, m in enumerate(markers):
+        nxt = anchors[i + 1] if i + 1 < len(anchors) else float('inf')
+        end = min(m['timecode'] + marker_window_sec, nxt)
+        for t in expand_marker_window(m['timecode'], scenes, end, marker_window_frames):
+            if t in seen_marker_tc:
+                continue
+            seen_marker_tc.add(t)
+            marker_items.append((t, assign_segment(t, bounds), True, m['phrase']))
+    raw_normal, raw_marker = [], []
     success_idx = 0
-    for tc, sid in tagged:
-        tmp = work / f'_tmp_{success_idx + 1:04d}.png'
+    for t, sid, is_marker, phrase in normal + marker_items:
+        success_idx += 1
+        tmp = work / f'_tmp_{success_idx:04d}.png'
         try:
-            extract_frame(video, tc, tmp)
+            extract_frame(video, t, tmp)
         except subprocess.CalledProcessError:
             if tmp.exists():
                 tmp.unlink()
+            success_idx -= 1
             continue
-        if tmp.exists():
-            success_idx += 1
-            f = work / f'cand_{success_idx:04d}.png'
-            tmp.replace(f)
-            raw.append((f, tc, sid))
-    return phash_dedup(raw, threshold=phash_threshold), final_cap
+        if not tmp.exists():
+            success_idx -= 1
+            continue
+        f = work / f'cand_{success_idx:04d}.png'
+        tmp.replace(f)
+        (raw_marker if is_marker else raw_normal).append((f, t, sid, is_marker, phrase))
+    kept = phash_dedup(raw_normal, threshold=phash_threshold) + raw_marker
+    kept.sort(key=lambda x: x[1])
+    return kept, final_cap
 
 def adaptive_cap(n_segments):
     return max(12, n_segments + 10)
@@ -337,14 +359,21 @@ def _cmd_extract(args):
     master_md_text = Path(args.master_md).read_text(encoding='utf-8')
     cands, final_cap = build_candidates(video, srt_text, master_md_text, work_dir,
                                         threshold=args.threshold)
-    sheet_path = contact_sheet([f for f, _, _ in cands], work_dir / 'contact_sheet.png')
+    sheet_path = contact_sheet([f for f, *_ in cands], work_dir / 'contact_sheet.png')
+    # посегментные простыни для субагентов Яруса 2
+    by_seg = {}
+    for f, t, sid, mk, ph in cands:
+        by_seg.setdefault(sid, []).append(f)
+    for sid, files in by_seg.items():
+        contact_sheet(files, work_dir / f'contact_sheet_seg{sid}.png')
     manifest_path = work_dir / 'candidates.json'
     manifest_path.write_text(
-        json.dumps([{'cand_id': _cand_num(f), 'timecode': t, 'segment_id': sid}
-                    for f, t, sid in cands], ensure_ascii=False, indent=2),
+        json.dumps([{'cand_id': _cand_num(f), 'timecode': t, 'segment_id': sid,
+                     'marker': mk, 'phrase': ph}
+                    for f, t, sid, mk, ph in cands], ensure_ascii=False, indent=2),
         encoding='utf-8')
     print(f'Кандидатов найдено: {len(cands)} (cap на бакет: {final_cap})')
-    print(f'Contact-sheet: {sheet_path}')
+    print(f'Contact-sheet: {sheet_path} (+ посегментные contact_sheet_seg*.png)')
     print(f'Манифест: {manifest_path}')
 
 def main():

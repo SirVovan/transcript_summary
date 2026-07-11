@@ -105,19 +105,35 @@ def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monke
     monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
     monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
 
-    def fake_extract_frame(video, t, out):
+    def fake_extract_frame(video, t, out, shift=0.7):
         calls.append(t)
-        if len(calls) == 2:
+        if len(calls) == 2:                         # 2-й кадр падает
             raise frames_extract.subprocess.CalledProcessError(1, ['ffmpeg'])
         _png(out)
-
     monkeypatch.setattr(frames_extract, 'extract_frame', fake_extract_frame)
 
     frames, cap = frames_extract.build_candidates('video.mp4', '', md, tmp_path, min_gap=0.0)
+    assert [f.name for f, *_ in frames] == ['cand_0001.png', 'cand_0002.png']
+    assert [t for _, t, *_ in frames] == [1.0, 65.0]
+    assert [sid for _, _, sid, *_ in frames] == ['01', '02']   # нумерация без дыр после сбоя
 
-    assert [f.name for f, _, _ in frames] == ['cand_0001.png', 'cand_0002.png']
-    assert [t for _, t, _ in frames] == [1.0, 65.0]
-    assert [sid for _, _, sid in frames] == ['01', '02']    # привязка к сегментам
+
+def test_build_candidates_marker_survives_dedup(tmp_path, monkeypatch):
+    md = ("## Сегмент 1 | 00:00:00-00:01:00 | A\n\n"
+          "## Сегмент 2 | 00:01:00-00:02:00 | B\n")
+    srt = "1\n00:00:30,000 --> 00:00:31,000\nЗаскриньте это\n"
+    # scene-кадр в 0.5с рядом с маркером 30с — маркер не должен быть поглощён
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda v, threshold: [0.5])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+
+    def fake_extract_frame(video, t, out, shift=0.7):
+        _png(out)
+    monkeypatch.setattr(frames_extract, 'extract_frame', fake_extract_frame)
+
+    frames, cap = frames_extract.build_candidates('v.mp4', srt, md, tmp_path, min_gap=0.0)
+    markers = [(t, sid, ph) for _, t, sid, mk, ph in frames if mk]
+    assert any(abs(t - 30.0) < 1e-6 and sid == '01' for t, sid, ph in markers)
+    assert any('аскриньте' in ph for _, _, ph in markers)
 
 
 # Phase 1 Task 1.1: segment_bounds tests
