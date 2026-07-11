@@ -343,6 +343,27 @@ def test_select_frames_drops_and_unknown_ignored():
     ]
     assert frames_extract.select_frames(triage, cands, cap=12) == []
 
+def test_select_frames_marker_always_in():
+    cands = [
+        {'cand_id': 1, 'segment_id': '01', 'marker': True},
+        {'cand_id': 2, 'segment_id': '01', 'marker': False},
+    ]
+    triage = [
+        {'cand_id': 1, 'type': 'slide-text', 'confidence': 0.05},   # низкая, но маркер
+        {'cand_id': 2, 'type': 'illustration', 'confidence': 0.9},
+    ]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    by = {s['cand_id']: s['phase'] for s in sel}
+    assert by[1] == 'marker'          # маркер отобран как высшая фаза
+    assert 2 in by
+
+def test_select_frames_marker_survives_drop():
+    # Триаж ошибочно пометил маркер-кадр drop — он всё равно обязан выжить.
+    cands = [{'cand_id': 1, 'segment_id': '01', 'marker': True}]
+    triage = [{'cand_id': 1, 'type': 'drop', 'confidence': 0.0}]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    assert [s['phase'] for s in sel] == ['marker']
+
 
 # Task 4.2: trim_to_weight tests
 def test_trim_to_weight_drops_budget_first():
@@ -406,9 +427,18 @@ def test_segment_report_counts():
     selection = [{'cand_id': 1, 'segment_id': '01', 'phase': 'mandatory'}]
     rows = frames_extract.segment_report(bounds, cands, triage, selection)
     assert rows == [
-        {'segment_id': '01', 'candidates': 2, 'triage_pass': 1, 'inserted': 1},
-        {'segment_id': '02', 'candidates': 1, 'triage_pass': 0, 'inserted': 0},
+        {'segment_id': '01', 'block_type': '', 'candidates': 2, 'triage_pass': 1, 'inserted': 1},
+        {'segment_id': '02', 'block_type': '', 'candidates': 1, 'triage_pass': 0, 'inserted': 0},
     ]
+
+def test_segment_report_block_type():
+    bounds = [{'id': '01', 'start': 0.0, 'end': 100.0}]
+    cands = [{'cand_id': 1, 'segment_id': '01', 'marker': False}]
+    triage = [{'cand_id': 1, 'type': 'slide-text', 'confidence': 0.9}]
+    selection = [{'cand_id': 1, 'segment_id': '01', 'phase': 'mandatory'}]
+    rows = frames_extract.segment_report(bounds, cands, triage, selection,
+                                         block_by_seg={'01': 'контентный'})
+    assert rows[0]['block_type'] == 'контентный'
 
 
 # Task 5.1: frames_schema без segment_hint

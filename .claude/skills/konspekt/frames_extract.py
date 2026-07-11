@@ -294,26 +294,40 @@ def adaptive_cap(n_segments):
     return max(12, n_segments + 10)
 
 def select_frames(triage, candidates, cap):
-    seg_by_cand = {c['cand_id']: c['segment_id'] for c in candidates}
+    by_cand = {c['cand_id']: c for c in candidates}
+    tri_by = {tr['cand_id']: tr for tr in triage}
+    # Маркеры — высшая фаза, вне cap И вне drop-фильтра триажа (гарантия «всегда»).
+    # Идём по candidates, а не по triage: маркер выживает, даже если триаж
+    # ошибочно пометил его drop или вовсе не оценил.
+    selected = []
+    for c in candidates:
+        if c.get('marker'):
+            tr = tri_by.get(c['cand_id'], {})
+            selected.append({'cand_id': c['cand_id'], 'segment_id': c['segment_id'],
+                             'type': tr.get('type', 'illustration'),
+                             'confidence': tr.get('confidence', 0.0), 'phase': 'marker'})
+    chosen = {s['cand_id'] for s in selected}
+    # non-marker: drop-фильтр применяется только здесь
     scored = [
-        {'cand_id': tr['cand_id'], 'segment_id': seg_by_cand[tr['cand_id']],
+        {'cand_id': tr['cand_id'], 'segment_id': by_cand[tr['cand_id']]['segment_id'],
          'type': tr['type'], 'confidence': tr['confidence']}
         for tr in triage
-        if tr['type'] != 'drop' and tr['cand_id'] in seg_by_cand
+        if tr['type'] != 'drop' and tr['cand_id'] in by_cand
+        and tr['cand_id'] not in chosen
     ]
-    # Обязательная фаза: лучший non-drop на каждый сегмент
+    # Обязательная фаза: лучший non-drop на каждый сегмент без маркера
     best = {}
     for s in scored:
         sid = s['segment_id']
         if sid not in best or s['confidence'] > best[sid]['confidence']:
             best[sid] = s
-    selected = [dict(s, phase='mandatory') for s in best.values()]
-    chosen = {s['cand_id'] for s in selected}
-    # Фаза бюджета: остаток по убыванию confidence по всему виджету
+    selected += [dict(s, phase='mandatory') for s in best.values()]
+    chosen |= {s['cand_id'] for s in selected}
+    # Фаза бюджета: остаток по убыванию confidence
     budget = cap - len(selected)
     rest = sorted((s for s in scored if s['cand_id'] not in chosen),
                   key=lambda s: s['confidence'], reverse=True)
-    selected.extend(dict(s, phase='budget') for s in rest[:max(0, budget)])
+    selected += [dict(s, phase='budget') for s in rest[:max(0, budget)]]
     return selected
 
 def trim_to_weight(selection, size_by_cand, limit_bytes):
@@ -333,7 +347,8 @@ def trim_to_weight(selection, size_by_cand, limit_bytes):
                 lost.append(s['segment_id'])
     return kept, lost
 
-def segment_report(bounds, candidates, triage, selection):
+def segment_report(bounds, candidates, triage, selection, block_by_seg=None):
+    block_by_seg = block_by_seg or {}
     triage_by = {t['cand_id']: t for t in triage}
     rows = []
     for b in bounds:
@@ -342,8 +357,9 @@ def segment_report(bounds, candidates, triage, selection):
         passed = sum(1 for cid in cand_ids
                      if triage_by.get(cid, {}).get('type', 'drop') != 'drop')
         inserted = sum(1 for s in selection if s['segment_id'] == sid)
-        rows.append({'segment_id': sid, 'candidates': len(cand_ids),
-                     'triage_pass': passed, 'inserted': inserted})
+        rows.append({'segment_id': sid, 'block_type': block_by_seg.get(sid, ''),
+                     'candidates': len(cand_ids), 'triage_pass': passed,
+                     'inserted': inserted})
     return rows
 
 def _cmd_select(args):
@@ -352,14 +368,18 @@ def _cmd_select(args):
     if isinstance(triage, dict) and 'frames' in triage:
         triage = triage['frames']
     bounds = segment_bounds(Path(args.master_md).read_text(encoding='utf-8'))
+    block_by_seg = {}
+    if getattr(args, 'segment_plan', None):
+        plan = json.loads(Path(args.segment_plan).read_text(encoding='utf-8'))
+        block_by_seg = {p['segment_id']: p.get('block_type', '') for p in plan}
     cap = adaptive_cap(len(bounds))
     selection = select_frames(triage, cands, cap)
     Path(args.out).write_text(
         json.dumps(selection, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f'Отобрано кадров: {len(selection)} (адаптивный потолок {cap})')
-    print('Сегмент | Кандидатов | Прошло триаж | Вставлено')
-    for r in segment_report(bounds, cands, triage, selection):
-        print(f"{r['segment_id']:>7} | {r['candidates']:>10} | "
+    print(f'Отобрано кадров: {len(selection)} (страховочный потолок {cap})')
+    print('Сегмент | Тип блока | Кандидатов | Прошло триаж | Вставлено')
+    for r in segment_report(bounds, cands, triage, selection, block_by_seg):
+        print(f"{r['segment_id']:>7} | {r['block_type']:>9} | {r['candidates']:>10} | "
               f"{r['triage_pass']:>12} | {r['inserted']:>9}")
 
 def _cmd_extract(args):
@@ -418,6 +438,7 @@ def main():
     sl.add_argument('--triage', required=True, help='JSON триажа (Шаг 2)')
     sl.add_argument('--master-md', required=True, help='мастер-MD (число сегментов)')
     sl.add_argument('--out', required=True, help='куда записать shortlist.json')
+    sl.add_argument('--segment-plan', help='segment_plan.json (тип блока для отчёта)')
     sl.set_defaults(func=_cmd_select)
 
     args = parser.parse_args()
