@@ -461,3 +461,14 @@ def test_expand_marker_window_caps():
 
 def test_expand_marker_window_anchor_only():
     assert frames_extract.expand_marker_window(10.0, [200.0], window_end=100.0) == [10.0]
+
+
+# Task 3.1: segment_transcript tests
+def test_segment_transcript_splits_by_bounds():
+    bounds = [{'id': '01', 'start': 0.0, 'end': 60.0},
+              {'id': '02', 'start': 60.0, 'end': 120.0}]
+    srt = ("1\n00:00:10,000 --> 00:00:12,000\nПервый сегмент\n\n"
+           "2\n00:01:10,000 --> 00:01:12,000\nВторой сегмент\n")
+    res = frames_extract.segment_transcript(srt, bounds)
+    assert 'Первый' in res['01'] and 'Второй' not in res['01']
+    assert 'Второй' in res['02']

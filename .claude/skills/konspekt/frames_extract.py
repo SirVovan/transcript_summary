@@ -61,6 +61,20 @@ def assign_segment(timecode, bounds):
                key=lambda b: min(abs(timecode - b['start']),
                                  abs(timecode - b['end'])))['id']
 
+def segment_transcript(srt_text, bounds):
+    out = {b['id']: [] for b in bounds}
+    for b in re.split(r'\n\s*\n', srt_text.strip()):
+        lines = b.splitlines()
+        tc_line = next((l for l in lines if '-->' in l), None)
+        if not tc_line:
+            continue
+        t = _srt_time_to_sec(tc_line.split('-->')[0].strip())
+        text = ' '.join(l for l in lines
+                        if '-->' not in l and not l.strip().isdigit()).strip()
+        if text:
+            out[assign_segment(t, bounds)].append(text)
+    return {sid: ' '.join(parts) for sid, parts in out.items()}
+
 def average_hash(img):
     from PIL import Image
     im = img if isinstance(img, Image.Image) else Image.open(img)
