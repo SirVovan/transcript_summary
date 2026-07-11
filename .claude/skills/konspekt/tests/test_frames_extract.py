@@ -285,3 +285,44 @@ def test_bucket_timecodes_global_fallback_reduces_cap():
                                                global_cap=30)
     assert len(res) <= 30
     assert cap < 10                                 # cap ужат для всех бакетов
+
+
+# Task 4.1: adaptive_cap + select_frames tests
+def test_adaptive_cap():
+    assert frames_extract.adaptive_cap(3) == 13
+    assert frames_extract.adaptive_cap(1) == 12      # пол 12
+
+def test_select_frames_guarantees_low_conf_segment():
+    cands = [
+        {'cand_id': 1, 'segment_id': '01'},
+        {'cand_id': 2, 'segment_id': '02'},
+    ]
+    triage = [
+        {'cand_id': 1, 'type': 'illustration', 'confidence': 0.9},
+        {'cand_id': 2, 'type': 'slide-text', 'confidence': 0.1},   # единственный в 02
+    ]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    ids = {s['cand_id'] for s in sel}
+    assert ids == {1, 2}                             # тихий сегмент 02 гарантирован
+    assert all(s['phase'] == 'mandatory' for s in sel)
+
+def test_select_frames_budget_allows_multiple_per_segment():
+    cands = [{'cand_id': i, 'segment_id': '01'} for i in range(1, 6)]
+    triage = [{'cand_id': i, 'type': 'slide-text', 'confidence': i / 10} for i in range(1, 6)]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    assert len(sel) == 5                             # богатый сегмент берёт больше 1
+    assert sum(1 for s in sel if s['phase'] == 'mandatory') == 1
+
+def test_select_frames_budget_respects_cap():
+    cands = [{'cand_id': i, 'segment_id': '01'} for i in range(1, 21)]
+    triage = [{'cand_id': i, 'type': 'slide-text', 'confidence': i / 100} for i in range(1, 21)]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    assert len(sel) == 12
+
+def test_select_frames_drops_and_unknown_ignored():
+    cands = [{'cand_id': 1, 'segment_id': '01'}]     # cand_id 2 нет в манифесте
+    triage = [
+        {'cand_id': 1, 'type': 'drop', 'confidence': 0.9},
+        {'cand_id': 2, 'type': 'slide-text', 'confidence': 0.9},
+    ]
+    assert frames_extract.select_frames(triage, cands, cap=12) == []

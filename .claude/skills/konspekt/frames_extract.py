@@ -227,6 +227,32 @@ def build_candidates(video, srt_text, master_md_text, work_dir,
             raw.append((f, tc, sid))
     return phash_dedup(raw, threshold=phash_threshold), final_cap
 
+def adaptive_cap(n_segments):
+    return max(12, n_segments + 10)
+
+def select_frames(triage, candidates, cap):
+    seg_by_cand = {c['cand_id']: c['segment_id'] for c in candidates}
+    scored = [
+        {'cand_id': tr['cand_id'], 'segment_id': seg_by_cand[tr['cand_id']],
+         'type': tr['type'], 'confidence': tr['confidence']}
+        for tr in triage
+        if tr['type'] != 'drop' and tr['cand_id'] in seg_by_cand
+    ]
+    # Обязательная фаза: лучший non-drop на каждый сегмент
+    best = {}
+    for s in scored:
+        sid = s['segment_id']
+        if sid not in best or s['confidence'] > best[sid]['confidence']:
+            best[sid] = s
+    selected = [dict(s, phase='mandatory') for s in best.values()]
+    chosen = {s['cand_id'] for s in selected}
+    # Фаза бюджета: остаток по убыванию confidence по всему виджету
+    budget = cap - len(selected)
+    rest = sorted((s for s in scored if s['cand_id'] not in chosen),
+                  key=lambda s: s['confidence'], reverse=True)
+    selected.extend(dict(s, phase='budget') for s in rest[:max(0, budget)])
+    return selected
+
 def _cmd_extract(args):
     work_dir = Path(args.work_dir)
     video = download_video(args.url, work_dir) if args.url else Path(args.video)
