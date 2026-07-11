@@ -75,6 +75,17 @@ def average_hash(img):
 def hamming(a, b):
     return bin(a ^ b).count('1')
 
+def phash_dedup(frames, threshold=6, window=3):
+    kept = []
+    kept_hashes = []
+    for item in frames:
+        h = average_hash(item[0])
+        if any(hamming(h, kh) <= threshold for kh in kept_hashes[-window:]):
+            continue
+        kept.append(item)
+        kept_hashes.append(h)
+    return kept
+
 def cue_timecodes(srt_text):
     out = []
     blocks = re.split(r'\n\s*\n', srt_text.strip())

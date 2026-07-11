@@ -207,3 +207,52 @@ def test_average_hash_differs_for_gradient(tmp_path):
     grad.convert("RGB").save(b)
     assert frames_extract.hamming(frames_extract.average_hash(a),
                                   frames_extract.average_hash(b)) > 0
+
+
+# Task 2.2: phash_dedup tests
+def _solid(path, color):
+    from PIL import Image
+    Image.new("RGB", (64, 64), color).save(path)
+
+def test_phash_dedup_collapses_identical(tmp_path):
+    a = tmp_path / "cand_0001.png"; b = tmp_path / "cand_0002.png"
+    _solid(a, (20, 20, 20)); _solid(b, (20, 20, 20))
+    res = frames_extract.phash_dedup([(a, 1.0, '01'), (b, 2.0, '01')], threshold=6)
+    assert [f.name for f, _, _ in res] == ["cand_0001.png"]
+
+def test_phash_dedup_keeps_distinct(tmp_path):
+    from PIL import Image
+    a = tmp_path / "cand_0001.png"; b = tmp_path / "cand_0002.png"
+    Image.new("RGB", (64, 64), (0, 0, 0)).save(a)
+    grad = Image.new("L", (64, 64))
+    grad.putdata([(x * 4) % 256 for x in range(64) for _ in range(64)])
+    grad.convert("RGB").save(b)
+    res = frames_extract.phash_dedup([(a, 1.0, '01'), (b, 2.0, '01')], threshold=6)
+    assert len(res) == 2
+
+def _pattern(path, fn):
+    # ВАЖНО: average-hash различает кадры по пространственной структуре, а НЕ по
+    # однотонной яркости. У сплошной заливки все пиксели равны среднему → маска из
+    # 64 единиц, ОДИНАКОВАЯ для любого цвета (см. average_hash: `p >= avg`). Поэтому
+    # фикстуры цикла строим паттернами: A и D идентичны, B и C отличаются от A и друг
+    # от друга. Solid-заливки здесь дали бы hamming=0 попарно и тест бы не проверял окно.
+    from PIL import Image
+    img = Image.new("L", (64, 64))
+    img.putdata([255 if fn(x, y) else 0 for y in range(64) for x in range(64)])
+    img.convert("RGB").save(path)
+
+def test_phash_dedup_cycle_abca_window3(tmp_path):
+    # A B C A: последний A совпадает с кадром 3 позиции назад -> окно N=3 его гасит.
+    patterns = [
+        lambda x, y: x < 32,   # A: лево/право
+        lambda x, y: y < 32,   # B: верх/низ      (hamming к A = 32)
+        lambda x, y: x >= 32,  # C: инверсия A    (hamming к A = 64)
+        lambda x, y: x < 32,   # D == A           (hamming к A = 0)
+    ]
+    paths = []
+    for i, fn in enumerate(patterns, 1):
+        p = tmp_path / f"cand_{i:04d}.png"
+        _pattern(p, fn)
+        paths.append((p, float(i), '01'))
+    res = frames_extract.phash_dedup(paths, threshold=6, window=3)
+    assert [f.name for f, _, _ in res] == ["cand_0001.png", "cand_0002.png", "cand_0003.png"]
