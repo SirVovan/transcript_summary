@@ -121,6 +121,23 @@ def dedup_by_gap(timecodes, min_gap=3.0, cap=60):
         kept = [kept[round(i * step)] for i in range(cap)]
     return kept
 
+def bucket_timecodes(scene_tcs, cue_tcs, bounds,
+                     min_gap=3.0, per_segment_cap=10, global_cap=150):
+    buckets = {b['id']: [] for b in bounds}
+    for t in sorted(set(scene_tcs) | set(cue_tcs)):
+        buckets[assign_segment(t, bounds)].append(t)
+    cap = per_segment_cap
+    while True:
+        result = []
+        for sid, tcs in buckets.items():
+            for t in dedup_by_gap(tcs, min_gap=min_gap, cap=cap):
+                result.append((t, sid))
+        if len(result) <= global_cap or cap <= 1:
+            break
+        cap -= 1
+    result.sort()
+    return result, cap
+
 def download_video(url, out_dir, browser=None):
     from cookies_spec import cookies_from_browser_args, DEFAULT_BROWSER
     if browser is None:

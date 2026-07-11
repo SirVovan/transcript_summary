@@ -256,3 +256,29 @@ def test_phash_dedup_cycle_abca_window3(tmp_path):
         paths.append((p, float(i), '01'))
     res = frames_extract.phash_dedup(paths, threshold=6, window=3)
     assert [f.name for f, _, _ in res] == ["cand_0001.png", "cand_0002.png", "cand_0003.png"]
+
+
+# Task 3.1: bucket_timecodes tests
+def test_bucket_timecodes_isolates_noisy_segment():
+    bounds = [
+        {'id': '01', 'start': 0.0, 'end': 100.0},
+        {'id': '02', 'start': 100.0, 'end': 200.0},
+    ]
+    scene = [float(i) for i in range(0, 100, 4)]   # шумный сегмент 01
+    cue = [150.0]                                   # один кадр в сегменте 02
+    res, cap = frames_extract.bucket_timecodes(scene, cue, bounds,
+                                               min_gap=0.0, per_segment_cap=10)
+    seg02 = [tc for tc, sid in res if sid == '02']
+    assert seg02 == [150.0]                         # тихий сегмент не потерян
+    assert all(0.0 <= tc < 100.0 for tc, sid in res if sid == '01')
+    assert res == sorted(res)                       # общий порядок по таймкоду
+
+def test_bucket_timecodes_global_fallback_reduces_cap():
+    bounds = [{'id': f'{i:02d}', 'start': i * 100.0, 'end': i * 100.0 + 100.0}
+              for i in range(1, 11)]                # 10 сегментов
+    scene = [i * 100.0 + j for i in range(1, 11) for j in range(0, 50, 2)]
+    res, cap = frames_extract.bucket_timecodes(scene, [], bounds,
+                                               min_gap=0.0, per_segment_cap=10,
+                                               global_cap=30)
+    assert len(res) <= 30
+    assert cap < 10                                 # cap ужат для всех бакетов
