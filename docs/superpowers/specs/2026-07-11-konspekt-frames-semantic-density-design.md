@@ -141,7 +141,7 @@ Full-res распознаётся **только у отобранных**. Пл
 - `.claude/skills/konspekt/layer2_widget.md` — основная правка: Шаги 1, 2, 2.5, 3, 4, 5, 6; формат `segment_plan.json`; таблицы «Оркестрация и модели» и «Лимиты по умолчанию» (cap → мягкий ориентир, жёсткий предел — вес; кодек WebP).
 - `.claude/skills/konspekt/frames_extract.py` — узкий маркер-греп с гарантированной нарезкой вне дедупа/капа + окно серии + флаг `marker` в `candidates.json`; хелпер нарезки транскрипта по сегментам; посегментный вызов `contact_sheet`; группировка сегментов в ≤3 пачки; `trim_to_weight` — категория `marker` и приоритет.
 - `.claude/skills/konspekt/md_parser.py` — `_encode_frame_b64` на WebP; `frame_weights` синхронно.
-- `.claude/skills/konspekt/frames_schema.json` — поле типа блока для отчёта Шага 6 (**необходимо**, не «при необходимости»); поле `marker`, если нужно контрактно.
+- `.claude/skills/konspekt/frames_schema.json` — **не меняется** (уточнено при ревью плана): `block_type` для отчёта идёт из `segment_plan.json`, `marker` — из `candidates.json`; триаж-контракт (`type/text/caption/confidence/cand_id`) прежний.
 - `.claude/skills/konspekt/tests/test_frames_extract.py`, `tests/test_widget_generator.py` — тесты новых детерминированных функций (маркер-гарантия, окно серии, приоритет trim, WebP-вес).
 
 ## Критерии успеха (E2E на реальном практикуме)

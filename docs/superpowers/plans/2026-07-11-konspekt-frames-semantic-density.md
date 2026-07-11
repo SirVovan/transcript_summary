@@ -29,7 +29,6 @@
 **Правится существующее:**
 - `.claude/skills/konspekt/frames_extract.py` — новые: `MARKER_TRIGGERS`, `marker_timecodes`, `expand_marker_window`, `segment_transcript`, `batch_segments`; переписан `build_candidates` (маркеры вне дедупа/капа, тег `marker`+`phrase`); `trim_to_weight` (категория `marker`); `select_frames` (phase `marker`); `segment_report` (+`block_type`); `_cmd_extract` (манифест с `marker`/`phrase`, посегментные простыни); `_cmd_select` (+`--segment-plan`).
 - `.claude/skills/konspekt/md_parser.py` — `_encode_frame_b64` на WebP.
-- `.claude/skills/konspekt/frames_schema.json` — поле `block_type` для отчёта (Шаг 6); `marker` при необходимости.
 - `.claude/skills/konspekt/layer2_widget.md` — Шаги 1–6, таблицы, формат `segment_plan.json`.
 - `.claude/skills/konspekt/tests/test_frames_extract.py`, `tests/test_widget_generator.py` — тесты.
 
@@ -179,9 +178,33 @@ git commit -m "feat(konspekt): expand_marker_window — якорь + серия 
 - Consumes: `marker_timecodes`, `expand_marker_window`, `bucket_timecodes`, `scene_timecodes`, `cue_timecodes`, `phash_dedup`, `extract_frame`, `segment_bounds`, `assign_segment`.
 - Produces: `build_candidates(video, srt_text, master_md_text, work_dir, threshold=0.2, min_gap=3.0, per_segment_cap=10, global_cap=150, phash_threshold=6, marker_window_sec=100.0, marker_window_frames=5) -> tuple[list[tuple[Path,float,str,bool,str]], int]` — список `(файл, таймкод, segment_id, marker_bool, phrase)` + итоговый cap. Маркер-таймкоды **не проходят** `dedup_by_gap`/global-cap и **не проходят** `phash_dedup`; scene+cue — как раньше.
 
-- [ ] **Step 1: Обновить существующий тест под новую сигнатуру + добавить тест гарантии маркера**
+- [ ] **Step 1: Адаптировать старый тест под 5-кортеж + добавить тест гарантии маркера**
 
-Заменить `test_build_candidates_numbers_successful_frames_without_gaps`:
+**Не удалять** покрытие ветки ошибки `extract_frame` — адаптировать существующий `test_build_candidates_numbers_successful_frames_without_gaps` под новую 5-элементную арность (fake принимает `shift`):
+
+```python
+def test_build_candidates_numbers_successful_frames_without_gaps(tmp_path, monkeypatch):
+    calls = []
+    md = ("## Сегмент 1 | 00:00:00-00:01:00 | A\n\n"
+          "## Сегмент 2 | 00:01:00-00:02:00 | B\n")
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda v, threshold: [1.0, 2.0, 65.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+
+    def fake_extract_frame(video, t, out, shift=0.7):
+        calls.append(t)
+        if len(calls) == 2:                         # 2-й кадр падает
+            raise frames_extract.subprocess.CalledProcessError(1, ['ffmpeg'])
+        _png(out)
+    monkeypatch.setattr(frames_extract, 'extract_frame', fake_extract_frame)
+
+    frames, cap = frames_extract.build_candidates('video.mp4', '', md, tmp_path, min_gap=0.0)
+    assert [f.name for f, *_ in frames] == ['cand_0001.png', 'cand_0002.png']
+    assert [t for _, t, *_ in frames] == [1.0, 65.0]
+    assert [sid for _, _, sid, *_ in frames] == ['01', '02']   # нумерация без дыр после сбоя
+```
+
+И добавить рядом тест гарантии маркера:
 
 ```python
 def test_build_candidates_marker_survives_dedup(tmp_path, monkeypatch):
@@ -226,10 +249,14 @@ def build_candidates(video, srt_text, master_md_text, work_dir,
     markers = marker_timecodes(srt_text)
     anchors = [m['timecode'] for m in markers]
     marker_items = []
+    seen_marker_tc = set()   # дедуп на стыке окон соседних маркеров (finding 6)
     for i, m in enumerate(markers):
         nxt = anchors[i + 1] if i + 1 < len(anchors) else float('inf')
         end = min(m['timecode'] + marker_window_sec, nxt)
         for t in expand_marker_window(m['timecode'], scenes, end, marker_window_frames):
+            if t in seen_marker_tc:
+                continue
+            seen_marker_tc.add(t)
             marker_items.append((t, assign_segment(t, bounds), True, m['phrase']))
     raw_normal, raw_marker = [], []
     success_idx = 0
@@ -421,7 +448,7 @@ def _encode_frame_b64(path):
 - [ ] **Step 4: Запустить — зелёные + существующие тесты рендера картинок**
 
 Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_generator.py" -q`
-Ожидание: новый зелёный; поправить существующие тесты, ожидавшие `image/jpeg`/`data:image/jpeg` (если есть) под WebP.
+Ожидание: новый зелёный. **Два теста гарантированно упадут** (вызывают `_encode_frame_b64` и ассертят JPEG) — поправить их на `data:image/webp`: `test_render_image_embeds_base64` (`:165`) и `test_build_html_with_frame` (`:213`). Тесты с *хардкоженной* строкой `data:image/jpeg` в фикстуре (напр. `:224`, вход для контроля веса) — не трогать, они не зовут кодек.
 
 - [ ] **Step 5: Коммит**
 
@@ -576,6 +603,13 @@ def test_select_frames_marker_always_in():
     assert by[1] == 'marker'          # маркер отобран как высшая фаза
     assert 2 in by
 
+def test_select_frames_marker_survives_drop():
+    # Триаж ошибочно пометил маркер-кадр drop — он всё равно обязан выжить.
+    cands = [{'cand_id': 1, 'segment_id': '01', 'marker': True}]
+    triage = [{'cand_id': 1, 'type': 'drop', 'confidence': 0.0}]
+    sel = frames_extract.select_frames(triage, cands, cap=12)
+    assert [s['phase'] for s in sel] == ['marker']
+
 def test_segment_report_block_type():
     bounds = [{'id': '01', 'start': 0.0, 'end': 100.0}]
     cands = [{'cand_id': 1, 'segment_id': '01', 'marker': False}]
@@ -596,20 +630,29 @@ Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_frames_e
 ```python
 def select_frames(triage, candidates, cap):
     by_cand = {c['cand_id']: c for c in candidates}
+    tri_by = {tr['cand_id']: tr for tr in triage}
+    # Маркеры — высшая фаза, вне cap И вне drop-фильтра триажа (гарантия «всегда»).
+    # Идём по candidates, а не по triage: маркер выживает, даже если триаж
+    # ошибочно пометил его drop или вовсе не оценил.
+    selected = []
+    for c in candidates:
+        if c.get('marker'):
+            tr = tri_by.get(c['cand_id'], {})
+            selected.append({'cand_id': c['cand_id'], 'segment_id': c['segment_id'],
+                             'type': tr.get('type', 'illustration'),
+                             'confidence': tr.get('confidence', 0.0), 'phase': 'marker'})
+    chosen = {s['cand_id'] for s in selected}
+    # non-marker: drop-фильтр применяется только здесь
     scored = [
         {'cand_id': tr['cand_id'], 'segment_id': by_cand[tr['cand_id']]['segment_id'],
-         'type': tr['type'], 'confidence': tr['confidence'],
-         'marker': by_cand[tr['cand_id']].get('marker', False)}
+         'type': tr['type'], 'confidence': tr['confidence']}
         for tr in triage
         if tr['type'] != 'drop' and tr['cand_id'] in by_cand
+        and tr['cand_id'] not in chosen
     ]
-    # Маркеры — высшая фаза, вне cap
-    selected = [dict(s, phase='marker') for s in scored if s['marker']]
-    chosen = {s['cand_id'] for s in selected}
-    rest_scored = [s for s in scored if s['cand_id'] not in chosen]
     # Обязательная фаза: лучший non-drop на каждый сегмент без маркера
     best = {}
-    for s in rest_scored:
+    for s in scored:
         sid = s['segment_id']
         if sid not in best or s['confidence'] > best[sid]['confidence']:
             best[sid] = s
@@ -617,7 +660,7 @@ def select_frames(triage, candidates, cap):
     chosen |= {s['cand_id'] for s in selected}
     # Фаза бюджета: остаток по убыванию confidence
     budget = cap - len(selected)
-    rest = sorted((s for s in rest_scored if s['cand_id'] not in chosen),
+    rest = sorted((s for s in scored if s['cand_id'] not in chosen),
                   key=lambda s: s['confidence'], reverse=True)
     selected += [dict(s, phase='budget') for s in rest[:max(0, budget)]]
     return selected
@@ -671,7 +714,7 @@ def _cmd_select(args):
 - [ ] **Step 5: Прогнать весь набор — зелёные**
 
 Run: `PYTHONUTF8=1 python -m pytest .claude/skills/konspekt/tests/ -q`
-Ожидание: всё зелёное (поправить существующие `select_frames`/`segment_report` тесты под новые ключи `marker`/`block_type`).
+Ожидание: всё зелёное. **Явно поправить `test_segment_report_counts` (`tests/test_frames_extract.py:360-373`)**: новый `segment_report` всегда добавляет ключ `block_type`, поэтому строгое сравнение `rows == [...]` упадёт — дописать `'block_type': ''` в оба ожидаемых словаря. Прочие `select_frames`-тесты со старыми фикстурами без ключа `marker` проходят (в `candidates` `.get('marker')` вернёт None → non-marker путь).
 
 - [ ] **Step 6: Коммит**
 
@@ -682,41 +725,11 @@ git commit -m "feat(konspekt): select_frames маркер-фаза + segment_rep
 
 ---
 
-# ФАЗА 4 — Контракт схемы + документация ветки
+# ФАЗА 4 — Документация ветки
 
-### Task 4.1: `frames_schema.json` — поле `block_type`
+> **Примечание (по ревью Sonnet, finding 3).** Правка `frames_schema.json` из первоначального плана **удалена** — поля `block_type`/`marker` в триаж-схеме были бы мёртвыми: `block_type` для отчёта берётся из `segment_plan.json` (пишет Ярус 1), `marker` — из `candidates.json` (Python-сторона, `select_frames`). Контракт триаж-JSON (`type/text/caption/confidence/cand_id`) не меняется. По правилу «ничего умозрительного» схему не трогаем.
 
-**Files:**
-- Modify: `.claude/skills/konspekt/frames_schema.json`
-
-**Interfaces:** JSON-schema триажа/разбора — добавить необязательное строковое поле `block_type` (для отчёта Шага 6) и булев `marker` (провенанс кадра). Не ломать существующие обязательные поля.
-
-- [ ] **Step 1: Прочитать текущую схему**
-
-Run: `PYTHONUTF8=1 python -c "import json,pathlib; print(pathlib.Path('.claude/skills/konspekt/frames_schema.json').read_text(encoding='utf-8'))"`
-
-- [ ] **Step 2: Добавить `block_type`/`marker` в properties объекта кадра**
-
-В объект-описание кадра добавить (значения-примеры; сохранить существующие поля `type`/`text`/`caption`/`confidence`/`cand_id`):
-
-```json
-"marker": { "type": "boolean" },
-"block_type": { "type": "string" }
-```
-
-- [ ] **Step 3: Проверить валидность JSON**
-
-Run: `PYTHONUTF8=1 python -c "import json; json.load(open('.claude/skills/konspekt/frames_schema.json', encoding='utf-8')); print('schema OK')"`
-Ожидание: `schema OK`.
-
-- [ ] **Step 4: Коммит**
-
-```bash
-git add .claude/skills/konspekt/frames_schema.json
-git commit -m "feat(konspekt): frames_schema — поля block_type и marker"
-```
-
-### Task 4.2: `layer2_widget.md` — Шаги 1–6, таблицы, `segment_plan.json` (суждение)
+### Task 4.1: `layer2_widget.md` — Шаги 1–6, таблицы, `segment_plan.json` (суждение)
 
 **Files:**
 - Modify: `.claude/skills/konspekt/layer2_widget.md`
