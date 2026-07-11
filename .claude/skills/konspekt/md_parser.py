@@ -525,30 +525,48 @@ def _render_prompt(label_text, code_text, pid):
 
 IMG_MAX_WIDTH = 1280
 
-def _render_image(alt, src, base_dir):
-    """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
-    path = Path(base_dir) / src
-    try:
-        from PIL import Image  # локальный импорт: обычный (без кадров) путь виджета не тянет Pillow
-        img = Image.open(path)
-        img.load()
-    except Exception as e:
-        print(f"[frames] пропуск картинки {src!r}: {e}", file=sys.stderr)
-        return ''
+def _frame_cand_num(src):
+    m = re.search(r'(\d+)', Path(src).stem)
+    return int(m.group(1)) if m else None
+
+def _encode_frame_b64(path):
+    from PIL import Image
+    img = Image.open(path); img.load()
     if img.width > IMG_MAX_WIDTH:
         h = round(img.height * IMG_MAX_WIDTH / img.width)
         img = img.resize((IMG_MAX_WIDTH, h))
     buf = io.BytesIO()
     if img.mode in ('RGBA', 'LA', 'P'):
-        img.convert('RGBA').save(buf, format='PNG', optimize=True)
-        mime = 'image/png'
+        img.convert('RGBA').save(buf, format='PNG', optimize=True); mime = 'image/png'
     else:
-        img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
-        mime = 'image/jpeg'
-    b64 = base64.b64encode(buf.getvalue()).decode('ascii')
-    cap = html.escape(alt, quote=True)   # экранирует и кавычки — alt идёт в атрибут
-    return (f'<figure class="frame"><img alt="{cap}" '
+        img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True); mime = 'image/jpeg'
+    return mime, base64.b64encode(buf.getvalue()).decode('ascii')
+
+def _render_image(alt, src, base_dir):
+    """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
+    try:
+        mime, b64 = _encode_frame_b64(Path(base_dir) / src)
+    except Exception as e:
+        print(f"[frames] пропуск картинки {src!r}: {e}", file=sys.stderr)
+        return ''
+    cap = html.escape(alt, quote=True)
+    cand = _frame_cand_num(src)
+    attr = f' data-cand="{cand}"' if cand is not None else ''
+    return (f'<figure class="frame"{attr}><img alt="{cap}" '
             f'src="data:{mime};base64,{b64}"><figcaption>{cap}</figcaption></figure>')
+
+def frame_weights(md_text, base_dir):
+    weights = {}
+    for m in re.finditer(r'^!\[(.*?)\]\((.+?)\)$', md_text, flags=re.MULTILINE):
+        cand = _frame_cand_num(m.group(2))
+        if cand is None:
+            continue
+        try:
+            _, b64 = _encode_frame_b64(Path(base_dir) / m.group(2))
+        except Exception:
+            continue
+        weights[cand] = len(b64)
+    return weights
 
 
 def _parse_text(block, prompt_counter, base_dir):

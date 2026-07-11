@@ -557,6 +557,31 @@ def build_html(data):
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Контроль веса (opt-in ветка «виджет с кадрами»)
+# ──────────────────────────────────────────────────────────────────────
+
+WEIGHT_LIMIT = 8 * 1024 * 1024
+
+def control_weight(html_str, weights, selection, limit_bytes):
+    total = len(html_str.encode('utf-8'))
+    if total <= limit_bytes:
+        return html_str, []
+    import re
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from frames_extract import trim_to_weight
+    overhead = total - sum(weights.values())
+    img_sel = [s for s in selection if s['cand_id'] in weights]
+    kept, lost = trim_to_weight(img_sel, weights, max(0, limit_bytes - overhead))
+    keep_ids = {s['cand_id'] for s in kept}
+    for s in img_sel:
+        if s['cand_id'] not in keep_ids:
+            html_str = re.sub(
+                r'<figure class="frame" data-cand="%d">.*?</figure>' % s['cand_id'],
+                '', html_str, flags=re.DOTALL)
+    return html_str, lost
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Валидация JS
 # ──────────────────────────────────────────────────────────────────────
 
@@ -588,11 +613,18 @@ def validate_js(html_path):
 # ──────────────────────────────────────────────────────────────────────
 
 def main():
-    if len(sys.argv) < 2:
+    argv = sys.argv[1:]
+    shortlist_path = None
+    if '--shortlist' in argv:
+        idx = argv.index('--shortlist')
+        shortlist_path = argv[idx + 1]
+        argv = argv[:idx] + argv[idx + 2:]
+
+    if len(argv) < 1:
         print(__doc__)
         sys.exit(1)
 
-    input_path = sys.argv[1]
+    input_path = argv[0]
     if not os.path.exists(input_path):
         print(f'Файл не найден: {input_path}', file=sys.stderr)
         sys.exit(1)
@@ -617,7 +649,18 @@ def main():
     out_name = data['meta'].get('out', 'widget_output.html')
     out_dir  = os.path.dirname(os.path.abspath(input_path))
 
-    html     = build_html(data)
+    html = build_html(data)
+    if shortlist_path and ext == '.md':
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from md_parser import frame_weights
+        md_text = open(input_path, encoding='utf-8').read()
+        weights = frame_weights(md_text, out_dir)
+        selection = json.load(open(shortlist_path, encoding='utf-8'))
+        html, lost = control_weight(html, weights, selection, WEIGHT_LIMIT)
+        if lost:
+            print('⚠ вес >8 МБ: сегменты без гарантированного кадра: '
+                  + ', '.join(lost), file=sys.stderr)
+
     out_path = os.path.join(out_dir, out_name)
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)

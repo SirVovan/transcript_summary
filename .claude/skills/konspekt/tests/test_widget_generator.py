@@ -211,3 +211,52 @@ def test_build_html_with_frame(tmp_path):
     out_html = widget_generator.build_html(data)
     assert 'figure.frame' in out_html          # CSS присутствует
     assert 'data:image/jpeg;base64,' in out_html
+
+
+# --- Task 4.4: control_weight / frame_weights / data-cand ---
+
+from md_parser import frame_weights, _render_image
+from PIL import Image
+
+def _figure(cand, nbytes):
+    # фейковая figure заданного «веса»: балласт в base64-поле + метка data-cand
+    return (f'<figure class="frame" data-cand="{cand}">'
+            f'<img src="data:image/jpeg;base64,{"A" * nbytes}"></figure>')
+
+def test_control_weight_noop_under_limit():
+    html = '<x>' + _figure(1, 10) + '</x>'
+    sel = [{'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'}]
+    out, lost = widget_generator.control_weight(html, {1: 10}, sel, limit_bytes=10_000)
+    assert out == html and lost == []
+
+def test_control_weight_drops_budget_figure_first():
+    html = '<x>' + _figure(1, 100) + _figure(2, 100) + '</x>'
+    weights = {1: 100, 2: 100}
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.2, 'phase': 'budget'},
+    ]
+    limit = len(html.encode('utf-8')) - 100        # надо срезать ~один кадр
+    out, lost = widget_generator.control_weight(html, weights, sel, limit_bytes=limit)
+    assert 'data-cand="2"' not in out and 'data-cand="1"' in out
+    assert lost == []                              # обязательный не тронут
+
+def test_control_weight_degrades_mandatory_reports_segment():
+    html = '<x>' + _figure(1, 100) + _figure(2, 100) + '</x>'
+    weights = {1: 100, 2: 100}
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.1, 'phase': 'mandatory'},
+    ]
+    limit = len(html.encode('utf-8')) - 100        # места только на один кадр
+    out, lost = widget_generator.control_weight(html, weights, sel, limit_bytes=limit)
+    assert 'data-cand="2"' not in out and 'data-cand="1"' in out
+    assert lost == ['02']
+
+def test_frame_weights_and_data_cand(tmp_path):
+    Image.new('RGB', (120, 80), (10, 20, 30)).save(tmp_path / 'cand_07.png')
+    Image.new('RGB', (120, 80), (90, 90, 90)).save(tmp_path / 'cand_12.png')
+    md = "![Слайд 7](cand_07.png)\n\n![Схема 12](cand_12.png)\n"
+    w = frame_weights(md, tmp_path)
+    assert set(w) == {7, 12} and all(v > 0 for v in w.values())
+    assert 'data-cand="7"' in _render_image('Слайд', 'cand_07.png', tmp_path)
