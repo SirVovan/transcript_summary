@@ -13,7 +13,7 @@
 - Скилл — под junction `~/.claude/skills/konspekt` → этот репозиторий; правки делать здесь.
 - Windows / PowerShell основной, Bash доступен. Запуск питона скилла: `PYTHONUTF8=1 python ...`.
 - Тесты скилла: `.claude/skills/konspekt/tests/`, запуск `PYTHONUTF8=1 python -m pytest .claude/skills/konspekt/tests/ -q`.
-- Скоуп — **только** ветка «виджет с кадрами»: `frames_extract.py`, `frames_schema.json`, `layer2_widget.md`, `tests/test_frames_extract.py`. Обычная сборка виджета, master-MD и preview не трогаются.
+- Скоуп — **только** ветка «виджет с кадрами»: `frames_extract.py`, `frames_schema.json`, `layer2_widget.md`, `tests/test_frames_extract.py`, плюс **контроль веса** в `widget_generator.py` / `md_parser.py` / `tests/test_widget_generator.py` (Task 4.4, включается опциональным флагом `--shortlist` — без него обычная сборка виджета, master-MD и preview **не трогаются**).
 - Формат заголовка сегмента мастер-MD закреплён: `## Сегмент N | HH:MM:SS-HH:MM:SS | Тема`; дефис между таймкодами — класс `[–-]` (hyphen или en-dash), как в `md_parser.py:332`. Новый парсер `segment_bounds` **независим** от `md_parser.py` (тот хранит только укороченную строку для отображения, числовых секунд там нет).
 - Пороги `scene-detect threshold` и `phash_threshold` — стартовые приближения, подбираются на E2E (не жёсткие числа спеки). В коде выставляются разумные дефолты.
 - TDD: сначала падающий тест, потом минимальная реализация. Частые локальные коммиты. **Push и PR не делать — пользователь сам.**
@@ -26,6 +26,9 @@
 **Правится существующее:**
 - `.claude/skills/konspekt/frames_extract.py` — новые функции `segment_bounds`, `assign_segment`, `bucket_timecodes`, `average_hash`/`hamming`/`phash_dedup`, `adaptive_cap`, `select_frames`, `trim_to_weight`, `segment_report`; переписан `build_candidates` (новая сигнатура: `master_md_text`, возврат `segment_id` + итоговый cap); CLI переведён на подкоманды `extract`/`select`.
 - `.claude/skills/konspekt/frames_schema.json` — удаляется `segment_hint`.
+- `.claude/skills/konspekt/md_parser.py` — `_render_image` помечает `<figure>` атрибутом `data-cand`, вес base64 выносится в переиспользуемый `_encode_frame_b64`; новый `frame_weights` (Task 4.4).
+- `.claude/skills/konspekt/widget_generator.py` — чистый `control_weight` + опциональный флаг `--shortlist`: замер итогового HTML и обрезка по весу через `frames_extract.trim_to_weight` (Task 4.4).
+- `.claude/skills/konspekt/tests/test_widget_generator.py` — тесты `control_weight` / `frame_weights` / `data-cand` (Task 4.4).
 - `.claude/skills/konspekt/layer2_widget.md` — Шаг 1 (флаг `--master-md`, посегментные квоты, pHash), Шаг 2 (триаж скорит всех, не отбирает), новый под-шаг «Отбор» между 2 и 3, Шаг 3 (промпт без `segment_hint`), Шаг 4 (join по `cand_id`, снятие посегментного потолка, адаптивный потолок, исправить фразу «у сегментов нет таймкодов»), Шаг 5/6 (порядок разрешения конфликта веса, таблица по сегментам), таблица «Лимиты по умолчанию».
 - `.claude/skills/konspekt/tests/test_frames_extract.py` — тесты новых функций; обновляется существующий `test_build_candidates_numbers_successful_frames_without_gaps` под новую сигнатуру.
 
@@ -287,6 +290,8 @@ git commit -m "feat(konspekt): average_hash + hamming (average-hash на PIL)"
 - Consumes: `average_hash`, `hamming` из Task 2.1.
 - Produces: `phash_dedup(frames: list[tuple], threshold: int = 6, window: int = 3) -> list[tuple]` — `frames` — список кортежей, где `[0]` = путь к PNG (порядок = временной, как из `bucket_timecodes`). Кадр гасится, если его hash в пределах `threshold` по Хэммингу к любому из **последних `window`** оставленных. Возвращает отфильтрованный список тех же кортежей.
 
+> **Риск: окно скользит через границы бакетов.** `raw` в `build_candidates` отсортирован по таймкоду (`bucket_timecodes` делает `result.sort()`), поэтому окно N=3 сравнивает первый кадр нового сегмента с хвостом предыдущего. Если начало сегмента визуально похоже на конец прошлого (та же говорящая голова) — единственный кандидат сегмента может погаснуть **до** `select_frames`, и гарантия «≥1 кадр на сегмент» молча не сработает (в отчёте — легитимно выглядящий `0`, хотя кадр физически был). Принято как компромисс метода (спека фиксирует average-hash как грубую метрику), но **проверяется глазами на E2E** (Task 7.1 Step 4, критерий «б»). Если на реале это будет заметно — запасной вариант: гонять `phash_dedup` внутри каждого бакета отдельно, а не сквозным потоком (отложено, не в MVP).
+
 - [ ] **Step 1: Написать падающий тест (в т.ч. цикл A→B→A окном N=3)**
 
 ```python
@@ -311,13 +316,29 @@ def test_phash_dedup_keeps_distinct(tmp_path):
     res = frames_extract.phash_dedup([(a, 1.0, '01'), (b, 2.0, '01')], threshold=6)
     assert len(res) == 2
 
-def test_phash_dedup_cycle_ababa_window3(tmp_path):
-    # A B C A: последний A совпадает с кадром 3 позиции назад -> окно N=3 его гасит.
+def _pattern(path, fn):
+    # ВАЖНО: average-hash различает кадры по пространственной структуре, а НЕ по
+    # однотонной яркости. У сплошной заливки все пиксели равны среднему → маска из
+    # 64 единиц, ОДИНАКОВАЯ для любого цвета (см. average_hash: `p >= avg`). Поэтому
+    # фикстуры цикла строим паттернами: A и D идентичны, B и C отличаются от A и друг
+    # от друга. Solid-заливки здесь дали бы hamming=0 попарно и тест бы не проверял окно.
     from PIL import Image
+    img = Image.new("L", (64, 64))
+    img.putdata([255 if fn(x, y) else 0 for y in range(64) for x in range(64)])
+    img.convert("RGB").save(path)
+
+def test_phash_dedup_cycle_abca_window3(tmp_path):
+    # A B C A: последний A совпадает с кадром 3 позиции назад -> окно N=3 его гасит.
+    patterns = [
+        lambda x, y: x < 32,   # A: лево/право
+        lambda x, y: y < 32,   # B: верх/низ      (hamming к A = 32)
+        lambda x, y: x >= 32,  # C: инверсия A    (hamming к A = 64)
+        lambda x, y: x < 32,   # D == A           (hamming к A = 0)
+    ]
     paths = []
-    for i, col in enumerate([(10, 10, 10), (200, 200, 200), (100, 100, 100), (10, 10, 10)], 1):
+    for i, fn in enumerate(patterns, 1):
         p = tmp_path / f"cand_{i:04d}.png"
-        Image.new("RGB", (64, 64), col).save(p)
+        _pattern(p, fn)
         paths.append((p, float(i), '01'))
     res = frames_extract.phash_dedup(paths, threshold=6, window=3)
     assert [f.name for f, _, _ in res] == ["cand_0001.png", "cand_0002.png", "cand_0003.png"]
@@ -367,7 +388,9 @@ git commit -m "feat(konspekt): phash_dedup со скользящим окном 
 
 **Interfaces:**
 - Consumes: `assign_segment`, `dedup_by_gap` (существует).
-- Produces: `bucket_timecodes(scene_tcs, cue_tcs, bounds, min_gap=3.0, per_segment_cap=10, global_cap=150) -> tuple[list[tuple[float,str]], int]` — объединяет scene+cue (уникальные), бакетирует по сегментам, применяет `dedup_by_gap` **внутри каждого бакета** с текущим cap; если суммарно > `global_cap`, равномерно уменьшает cap для всех бакетов (по 1), пока не впишется или cap не дойдёт до 1. Возвращает `(отсортированный по таймкоду список (tc, segment_id), итоговый_cap)`.
+- Produces: `bucket_timecodes(scene_tcs, cue_tcs, bounds, min_gap=3.0, per_segment_cap=10, global_cap=150) -> tuple[list[tuple[float,str]], int]` — объединяет scene+cue (уникальные), бакетирует по сегментам, применяет `dedup_by_gap` **внутри каждого бакета** с текущим cap; если суммарно > `global_cap`, уменьшает единый cap для всех бакетов (по 1), пока не впишется или cap не дойдёт до 1. Возвращает `(отсортированный по таймкоду список (tc, segment_id), итоговый_cap)`.
+
+> **Терминология.** Спека (компонент 3) говорит «пропорционально всем бакетам». Здесь это реализовано как **единый нисходящий cap для всех бакетов сразу** (все ужимаются одновременно), а не пропорционально размеру каждого бакета: при cap=k бакеты крупнее k режутся до k, а мелкие (размер < k) не трогаются, пока cap не опустится ниже их размера. Это соответствует смыслу «ужимать все одновременно» и проще; отличие от буквального «пропорционально размеру» проявилось бы только при сильном перекосе размеров бакетов и признано приемлемым.
 
 - [ ] **Step 1: Написать падающий тест**
 
@@ -542,14 +565,13 @@ def main():
     ex.add_argument('--master-md', required=True, help='путь к мастер-MD (границы сегментов)')
     ex.add_argument('--work-dir', required=True, help='папка для кадров и простыни')
     ex.add_argument('--threshold', type=float, default=0.2, help='порог scene-detect')
-    ex.add_argument('--dry-run', action='store_true', help='остановиться после простыни')
     ex.set_defaults(func=_cmd_extract)
 
     args = parser.parse_args()
     args.func(args)
 ```
 
-> `--dry-run` семантически покрыт: `extract` и так останавливается на простыне+манифесте, триаж/отбор — отдельные шаги ветки. Флаг оставлен для совместимости команд в `layer2_widget.md`.
+> `--dry-run` **удалён**, а не оставлен «для совместимости»: после разбиения на `extract`/`select` подкоманда `extract` и так завершается на простыне+манифесте (триаж/отбор — отдельные шаги ветки), поэтому флаг был бы no-op — `_cmd_extract` его не читал. Оставлять неработающий флаг = вводить в заблуждение. Упоминание `--dry-run` вычищается и из `layer2_widget.md` (Task 6.1 Step 1).
 
 - [ ] **Step 5: Прогнать весь набор — зелёные**
 
@@ -656,6 +678,8 @@ def select_frames(triage, candidates, cap):
     selected.extend(dict(s, phase='budget') for s in rest[:max(0, budget)])
     return selected
 ```
+
+> **Инвариант cap.** `select_frames` **не** обрезает обязательную фазу до `cap` — она полагается на то, что вызывающий передаёт `cap ≥ числа сегментов с non-drop`. Это гарантирует `adaptive_cap = max(12, сегментов+10)`: обязательных ≤ сегментов, значит `budget = cap − len(mandatory) ≥ 10 > 0` всегда, и `max(0, budget)` — защита от отрицательного бюджета — на штатном пути не срабатывает (мёртвая, но безвредная). Если функцию когда-нибудь вызовут с `cap < числа сегментов` (не текущий пайплайн), она вернёт > cap кадров — обрезка веса до лимита остаётся за `trim_to_weight` (Task 4.2).
 
 - [ ] **Step 4: Запустить — зелёные**
 
@@ -853,6 +877,182 @@ git add .claude/skills/konspekt/frames_extract.py .claude/skills/konspekt/tests/
 git commit -m "feat(konspekt): segment_report + CLI select (join по cand_id, таблица по сегментам)"
 ```
 
+### Task 4.4: Замкнуть петлю веса ≤8 МБ (замер итогового HTML → `trim_to_weight` → ребилд)
+
+**Мотивация (находка ревью).** До этой задачи `trim_to_weight` (Task 4.2) — функция **без триггера**: рендер картинок (`md_parser._render_image`) жмёт каждую по отдельности (ресайз до `IMG_MAX_WIDTH=1280`, JPEG q82), но **суммарного измерения веса итогового HTML и цикла обрезки нет нигде** — `widget_generator` просто пишет файл. При адаптивном потолке `max(12, сегментов+10)` = 15-25 картинок это реальный риск перевеса (спека, компонент 6). Задача замыкает петлю **build → вес → обрезка → ребилд**: `data-cand` на `<figure>` даёт адрес для хирургического удаления, `control_weight` меряет итог и режет проигравших через `trim_to_weight`. Обычная сборка (без `--shortlist`) не затрагивается.
+
+**Files:**
+- Modify: `.claude/skills/konspekt/md_parser.py` — `_encode_frame_b64` (выделить из `_render_image`), `data-cand` на `<figure>`, `frame_weights`.
+- Modify: `.claude/skills/konspekt/widget_generator.py` — `control_weight`, флаг `--shortlist`, `WEIGHT_LIMIT`.
+- Test: `.claude/skills/konspekt/tests/test_widget_generator.py`
+
+**Interfaces:**
+- `md_parser._encode_frame_b64(path) -> tuple[str, str]` — `(mime, b64)`; та же логика сжатия, что была в `_render_image` (рефактор без смены поведения).
+- `md_parser._render_image(...)` — теперь эмитит `<figure class="frame" data-cand="NN">…` (`NN` — число из имени `cand_NN.png`; если в `src` нет числа — атрибут не добавляется). Прочий вывод неизменен (существующие тесты `test_render_image_embeds_base64` и др. продолжают проходить).
+- `md_parser.frame_weights(md_text, base_dir) -> dict[int, int]` — по строкам `![](src)` вернуть `{cand_id: len(b64)}` тем же кодированием.
+- `widget_generator.control_weight(html, weights, selection, limit_bytes) -> tuple[str, list[str]]` — если `len(html.encode('utf-8')) > limit_bytes`: считает overhead (`total − сумма весов картинок`), фильтрует `selection` до картиночных кандидатов (`cand_id in weights`), зовёт `trim_to_weight(img_sel, weights, limit − overhead)`, вырезает `<figure … data-cand="N">…</figure>` проигравших. Возвращает `(html, lost_segment_ids)`. Текстовые кадры (не в `weights`) в обрезку веса не попадают. JS не трогается (удаляются только `<figure>`), инвариант `✅ JS syntax OK` сохраняется.
+- `widget_generator` CLI: опциональный `--shortlist <shortlist.json>` — при наличии и перевесе применить `control_weight`; при `lost` — предупреждение в stderr. Без флага — поведение как сейчас.
+
+> **Приближение и YAGNI.** overhead (CSS/JS/текст) считается как «итог минус вес картинок» — байты base64-строки ≈ utf-8 байты, точности для порога 8 МБ достаточно (лимит с запасом). «Сначала сильнее сжать, потом резать» (спека, компонент 6, п.1) в MVP реализовано фиксированным сжатием 1280/q82 + обрезкой; **динамическое** пере-сжатие (снижать качество/ширину перед выбрасыванием) отложено как улучшение.
+
+- [ ] **Step 1: Написать падающие тесты**
+
+```python
+# tests/test_widget_generator.py — добавить
+import widget_generator
+from md_parser import frame_weights, _render_image
+from PIL import Image
+
+def _figure(cand, nbytes):
+    # фейковая figure заданного «веса»: балласт в base64-поле + метка data-cand
+    return (f'<figure class="frame" data-cand="{cand}">'
+            f'<img src="data:image/jpeg;base64,{"A" * nbytes}"></figure>')
+
+def test_control_weight_noop_under_limit():
+    html = '<x>' + _figure(1, 10) + '</x>'
+    sel = [{'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'}]
+    out, lost = widget_generator.control_weight(html, {1: 10}, sel, limit_bytes=10_000)
+    assert out == html and lost == []
+
+def test_control_weight_drops_budget_figure_first():
+    html = '<x>' + _figure(1, 100) + _figure(2, 100) + '</x>'
+    weights = {1: 100, 2: 100}
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.2, 'phase': 'budget'},
+    ]
+    limit = len(html.encode('utf-8')) - 100        # надо срезать ~один кадр
+    out, lost = widget_generator.control_weight(html, weights, sel, limit_bytes=limit)
+    assert 'data-cand="2"' not in out and 'data-cand="1"' in out
+    assert lost == []                              # обязательный не тронут
+
+def test_control_weight_degrades_mandatory_reports_segment():
+    html = '<x>' + _figure(1, 100) + _figure(2, 100) + '</x>'
+    weights = {1: 100, 2: 100}
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.1, 'phase': 'mandatory'},
+    ]
+    limit = len(html.encode('utf-8')) - 100        # места только на один кадр
+    out, lost = widget_generator.control_weight(html, weights, sel, limit_bytes=limit)
+    assert 'data-cand="2"' not in out and 'data-cand="1"' in out
+    assert lost == ['02']
+
+def test_frame_weights_and_data_cand(tmp_path):
+    Image.new('RGB', (120, 80), (10, 20, 30)).save(tmp_path / 'cand_07.png')
+    Image.new('RGB', (120, 80), (90, 90, 90)).save(tmp_path / 'cand_12.png')
+    md = "![Слайд 7](cand_07.png)\n\n![Схема 12](cand_12.png)\n"
+    w = frame_weights(md, tmp_path)
+    assert set(w) == {7, 12} and all(v > 0 for v in w.values())
+    assert 'data-cand="7"' in _render_image('Слайд', 'cand_07.png', tmp_path)
+```
+
+- [ ] **Step 2: Запустить — падает**
+
+Run: `PYTHONUTF8=1 python -m pytest ".claude/skills/konspekt/tests/test_widget_generator.py" -k "control_weight or frame_weights" -v`
+Ожидание: FAIL (`control_weight`/`frame_weights`/`data-cand` не существуют).
+
+- [ ] **Step 3: Реализовать**
+
+В `md_parser.py` — выделить кодирование и добавить `data-cand` + `frame_weights` (рефактор `_render_image` без смены прочего вывода):
+
+```python
+def _frame_cand_num(src):
+    m = re.search(r'(\d+)', Path(src).stem)
+    return int(m.group(1)) if m else None
+
+def _encode_frame_b64(path):
+    from PIL import Image
+    img = Image.open(path); img.load()
+    if img.width > IMG_MAX_WIDTH:
+        h = round(img.height * IMG_MAX_WIDTH / img.width)
+        img = img.resize((IMG_MAX_WIDTH, h))
+    buf = io.BytesIO()
+    if img.mode in ('RGBA', 'LA', 'P'):
+        img.convert('RGBA').save(buf, format='PNG', optimize=True); mime = 'image/png'
+    else:
+        img.convert('RGB').save(buf, format='JPEG', quality=82, optimize=True); mime = 'image/jpeg'
+    return mime, base64.b64encode(buf.getvalue()).decode('ascii')
+
+def _render_image(alt, src, base_dir):
+    """`![alt](src)` -> <figure> c base64 data-URI. Мягкая деградация -> ''."""
+    try:
+        mime, b64 = _encode_frame_b64(Path(base_dir) / src)
+    except Exception as e:
+        print(f"[frames] пропуск картинки {src!r}: {e}", file=sys.stderr)
+        return ''
+    cap = html.escape(alt, quote=True)
+    cand = _frame_cand_num(src)
+    attr = f' data-cand="{cand}"' if cand is not None else ''
+    return (f'<figure class="frame"{attr}><img alt="{cap}" '
+            f'src="data:{mime};base64,{b64}"><figcaption>{cap}</figcaption></figure>')
+
+def frame_weights(md_text, base_dir):
+    weights = {}
+    for m in re.finditer(r'^!\[(.*?)\]\((.+?)\)$', md_text, flags=re.MULTILINE):
+        cand = _frame_cand_num(m.group(2))
+        if cand is None:
+            continue
+        try:
+            _, b64 = _encode_frame_b64(Path(base_dir) / m.group(2))
+        except Exception:
+            continue
+        weights[cand] = len(b64)
+    return weights
+```
+
+В `widget_generator.py` — `control_weight`, `WEIGHT_LIMIT`, флаг `--shortlist`:
+
+```python
+WEIGHT_LIMIT = 8 * 1024 * 1024
+
+def control_weight(html_str, weights, selection, limit_bytes):
+    total = len(html_str.encode('utf-8'))
+    if total <= limit_bytes:
+        return html_str, []
+    import re
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from frames_extract import trim_to_weight
+    overhead = total - sum(weights.values())
+    img_sel = [s for s in selection if s['cand_id'] in weights]
+    kept, lost = trim_to_weight(img_sel, weights, max(0, limit_bytes - overhead))
+    keep_ids = {s['cand_id'] for s in kept}
+    for s in img_sel:
+        if s['cand_id'] not in keep_ids:
+            html_str = re.sub(
+                r'<figure class="frame" data-cand="%d">.*?</figure>' % s['cand_id'],
+                '', html_str, flags=re.DOTALL)
+    return html_str, lost
+```
+
+В `main()` — распарсить опциональный `--shortlist` (до позиционного `input_path`) и после `build_html` применить контроль веса только для `.md` с переданным shortlist:
+
+```python
+    html = build_html(data)
+    if shortlist_path and ext == '.md':
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from md_parser import frame_weights
+        md_text = open(input_path, encoding='utf-8').read()
+        weights = frame_weights(md_text, out_dir)
+        selection = json.load(open(shortlist_path, encoding='utf-8'))
+        html, lost = control_weight(html, weights, selection, WEIGHT_LIMIT)
+        if lost:
+            print('⚠ вес >8 МБ: сегменты без гарантированного кадра: '
+                  + ', '.join(lost), file=sys.stderr)
+```
+
+- [ ] **Step 4: Запустить тесты + весь набор — зелёные**
+
+Run: `PYTHONUTF8=1 python -m pytest .claude/skills/konspekt/tests/ -q`
+Ожидание: всё зелёное (в т.ч. существующие тесты картинок в `test_widget_generator.py` — вывод `_render_image` изменился только добавлением `data-cand`).
+
+- [ ] **Step 5: Коммит**
+
+```bash
+git add .claude/skills/konspekt/md_parser.py .claude/skills/konspekt/widget_generator.py .claude/skills/konspekt/tests/test_widget_generator.py
+git commit -m "feat(konspekt): контроль веса ≤8 МБ — замер HTML + trim_to_weight + ребилд по --shortlist"
+```
+
 ---
 
 # ФАЗА 5 — Схема без `segment_hint`
@@ -948,8 +1148,10 @@ git commit -m "feat(konspekt): убрать segment_hint из frames_schema — 
 PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/frames_extract.py" extract \
   --url "<youtube-url>" --srt "<рабочая-папка>/SRC_....srt" \
   --master-md "<рабочая-папка>/MASTER_[Название].md" \
-  --work-dir "<рабочая-папка>/frames_work" [--threshold 0.2] [--dry-run]
+  --work-dir "<рабочая-папка>/frames_work" [--threshold 0.2]
 ```
+
+Убрать `--dry-run` из команды и из описания флагов (`:180`) — флаг удалён (см. Task 3.2 Step 4): `extract` и так останавливается на простыне+манифесте.
 
 В описании «Под капотом» (`:182`) заменить логику дедупа/cap: `dedup_by_gap` теперь применяется **внутри каждого сегментного бакета** (`bucket_timecodes` через `segment_bounds`), с общим предохранителем ~150 (пропорциональный пересчёт cap); после извлечения работает `phash_dedup` (average-hash, скользящее окно N=3) — гасит повторные каты камеры. Порог scene-detect по умолчанию понижен (0.2, подбирается на E2E — pHash гасит возросший шум).
 
@@ -984,9 +1186,17 @@ PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/frames_extract.py" select \
 - убрать упоминание входного поля `segment_hint` в перечне JSON-результата (`:220`);
 - заменить строку лимитов (`:229`) «≤12 картинок на виджет, ≤2 на сегмент»: посегментного потолка **нет**, общий потолок адаптивный `max(12, сегментов+10)`, отбор регулируется двухфазной логикой.
 
-- [ ] **Step 6: Шаг 5/6 — порядок разрешения конфликта веса + таблица по сегментам**
+- [ ] **Step 6: Шаг 5/6 — контроль веса (автоматический) + таблица по сегментам**
 
-В Шаге 5 (`:233-239`) или 6 добавить процедуру разрешения «покрытие vs вес ≤8 МБ»: (1) сильнее сжать/уменьшить отобранные; (2) если всё ещё >8 МБ — убирать кадры фазы бюджета по возрастанию `confidence` (`trim_to_weight`); (3) в крайнем случае — деградация обязательных с явным предупреждением в отчёте, какие сегменты лишились гарантированного кадра. Тихого падения быть не должно.
+В Шаге 5 (`:233-239`) в команду сборки добавить `--shortlist "<рабочая-папка>/frames_work/shortlist.json"` — это включает контроль веса в `widget_generator` (Task 4.4):
+
+```
+PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/widget_generator.py" \
+  "<рабочая-папка>/MASTER_[Название]_с_кадрами.md" \
+  --shortlist "<рабочая-папка>/frames_work/shortlist.json"
+```
+
+Описать процедуру разрешения «покрытие vs вес ≤8 МБ», которую `control_weight` выполняет **автоматически**: (1) картинки уже сжаты при рендере (ресайз 1280 / JPEG q82); (2) если итоговый HTML всё равно >8 МБ — убираются `<figure>` фазы бюджета по возрастанию `confidence` (`trim_to_weight`); (3) в крайнем случае — деградация обязательных с предупреждением в stderr, какие сегменты лишились гарантированного кадра (эти `segment_id` идут в отчёт Шага 6). Тихого падения нет — при перевесе печатается явное предупреждение. Динамическое пере-сжатие (снижать качество перед выбрасыванием) — отложенное улучшение.
 
 В Шаге 6 (`:241-243`) дополнить отчёт таблицей по сегментам (её печатает подкоманда `select`):
 
@@ -1009,7 +1219,7 @@ PYTHONUTF8=1 python "$HOME/.claude/skills/konspekt/frames_extract.py" select \
 
 - [ ] **Step 8: Проверить, что устаревших формулировок не осталось**
 
-Run: `rg -n "segment_hint|у сегментов.*нет.*таймкод|≤2 на сегмент|≤12 картинок|shortlist 5–15" .claude/skills/konspekt/layer2_widget.md`
+Run: `rg -n "segment_hint|у сегментов.*нет.*таймкод|≤2 на сегмент|≤12 картинок|shortlist 5–15|dry-run" .claude/skills/konspekt/layer2_widget.md`
 Ожидание: пусто (все вхождения переписаны).
 
 - [ ] **Step 9: Коммит**
@@ -1057,11 +1267,11 @@ git commit -m "docs(konspekt): ветка кадров — квоты/pHash/дв
 3. Посегментные квоты + fallback-пересчёт при >150 → Task 3.1; интеграция в `build_candidates` → Task 3.2.
 4. Явный порядок «триаж (скорит всех) → детерминированный двухфазный отбор → full-res только shortlist» → Task 4.1 (`select_frames`) + документация Task 6.1 (Шаги 2/новый/3).
 5. Удаление `segment_hint` + join по `cand_id` → Task 5.1 (схема) + Task 4.3 (`select_frames`/`select`) + Task 6.1 (Шаги 3/4).
-6. Адаптивный потолок `max(12, сегментов+10)` + порядок разрешения конфликта веса → Task 4.1 (`adaptive_cap`), Task 4.2 (`trim_to_weight`), Task 6.1 (Шаг 5/6).
+6. Адаптивный потолок `max(12, сегментов+10)` + порядок разрешения конфликта веса → Task 4.1 (`adaptive_cap`), Task 4.2 (`trim_to_weight` как чистая политика) + **Task 4.4 (замкнутая петля веса: замер итогового HTML в `control_weight` → `trim_to_weight` → вырезание `<figure>` → предупреждение)**, Task 6.1 (Шаг 5/6, флаг `--shortlist`).
 7. Отчёт-таблица по сегментам → Task 4.3 (`segment_report`, печать в `select`) + Task 6.1 (Шаг 6).
 8. Исправить фразу «у сегментов нет таймкодов» → Task 6.1 Step 5.
-- Обработка ошибок: нет `--master-md`/сегментов → `SegmentBoundsError` (Task 1.1, `build_candidates` через `segment_bounds`); немонотонность/пересечение → та же ошибка; пустой бакет → ноль в отчёте (`segment_report`); превышение веса после обрезки бюджета → `lost` из `trim_to_weight` → предупреждение в отчёте (Task 6.1 Шаг 6).
-- Тесты спеки: `segment_bounds` (1.1), бакетирование по исходному таймкоду (3.2), `phash_dedup` три кейса (2.2), посегментные квоты + fallback 150 (3.1), двухфазный отбор + join (4.1/4.3), вес — бюджет раньше обязательных (4.2), схема без `segment_hint` (5.1), E2E (7.1).
+- Обработка ошибок: нет `--master-md`/сегментов → `SegmentBoundsError` (Task 1.1, `build_candidates` через `segment_bounds`); немонотонность/пересечение → та же ошибка; пустой бакет → ноль в отчёте (`segment_report`); превышение веса итогового HTML → `control_weight` режет бюджет, затем обязательные, `lost` → предупреждение в stderr + отчёт (Task 4.4, Task 6.1 Шаг 6).
+- Тесты спеки: `segment_bounds` (1.1), бакетирование по исходному таймкоду (3.2), `phash_dedup` три кейса (2.2), посегментные квоты + fallback 150 (3.1), двухфазный отбор + join (4.1/4.3), вес — бюджет раньше обязательных (4.2), контроль веса итогового HTML + `data-cand`/`frame_weights` (4.4), схема без `segment_hint` (5.1), E2E (7.1).
 
 **Плейсхолдеры:** код приведён для всех тестируемых задач; текстовые правки `layer2_widget.md` — с точными якорями строк и grep-проверкой (Task 6.1 Step 8).
 
@@ -1071,4 +1281,5 @@ git commit -m "docs(konspekt): ветка кадров — квоты/pHash/дв
 - `build_candidates(...) -> (list[(Path,float,str)], int)`; манифест — `{cand_id, timecode, segment_id}`.
 - `adaptive_cap(int) -> int`; `select_frames(triage, candidates, cap) -> list[{cand_id, segment_id, type, confidence, phase}]`; `phase ∈ {'mandatory','budget'}` — единое написание в `select_frames`/`trim_to_weight`/`segment_report`.
 - `trim_to_weight(selection, size_by_cand, limit) -> (list, list[str])`; `segment_report(bounds, candidates, triage, selection) -> list[{segment_id, candidates, triage_pass, inserted}]`.
+- `frame_weights(md_text, base_dir) -> dict[cand_id, int]`; `control_weight(html, weights, selection, limit) -> (html, list[segment_id])` — `selection` = `shortlist.json` (та же форма, что отдаёт `select_frames`: `{cand_id, segment_id, confidence, phase}`); ключ join с картинками — `cand_id` (число из `cand_NN.png` = `data-cand`).
 - Ключ join везде — `cand_id`; `segment_id` — строка `'01'`, `'02'`, … (совпадает с `id` из `segment_bounds`).
