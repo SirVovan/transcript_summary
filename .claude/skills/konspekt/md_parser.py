@@ -100,6 +100,31 @@ def parse_master_md(path):
     }
 
 
+def _split_on_hr(text):
+    """Режет текст по строкам `---`, игнорируя те, что внутри fenced code block.
+
+    `---` встречается в дословных промптах (YAML-фронтматтер): без учёта fence
+    такой промпт разрывал сегмент на две «секции», и парсер падал.
+    """
+    parts, buf = [], []
+    fence_char, fence_len = None, 0
+    for line in text.split('\n'):
+        m = re.match(r'\s*(`{3,}|~{3,})', line)
+        if m:
+            tok = m.group(1)
+            if fence_char is None:
+                fence_char, fence_len = tok[0], len(tok)
+            elif tok[0] == fence_char and len(tok) >= fence_len:
+                fence_char, fence_len = None, 0
+        if fence_char is None and line == '---':
+            parts.append('\n'.join(buf))
+            buf = []
+        else:
+            buf.append(line)
+    parts.append('\n'.join(buf))
+    return parts
+
+
 def _split_sections(text):
     """Режет мастер-MD на header, route (опц.), reconstruction (опц.), segments[]."""
     text = text.replace('\r\n', '\n').replace('\r', '\n')
@@ -111,8 +136,7 @@ def _split_sections(text):
     if frontmatter:
         text = text[frontmatter.end():]
 
-    parts = re.split(r'\n---\n', text)
-    parts = [p.strip() for p in parts if p.strip()]
+    parts = [p.strip() for p in _split_on_hr(text) if p.strip()]
 
     if not parts:
         raise MasterMDParseError("Пустой файл")

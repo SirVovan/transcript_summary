@@ -119,3 +119,48 @@ def test_segment_carries_raw_type_as_label(tmp_path):
     path.write_text(MASTER_BODY, encoding='utf-8')
     data = parse_master_md(path)
     assert data['segments'][0]['label']
+
+
+# --- `---` внутри fenced code block не разделяет секции ---
+
+MASTER_WITH_FENCED_HR = """# Тест. Модуль 1: заголовок
+
+**Спикер:** Кто-то
+
+---
+
+## Сегмент 1 | 00:00:00-00:03:38 | Тема
+
+**Тип:** Тезис
+**Ключевая мысль:** мысль
+
+### Карта
+
+- **Метка:** пункт
+
+### Текст
+
+Спикер показывает промпт с фронтматтером.
+
+> **Промпт «С фронтматтером»:**
+
+```
+---
+name: agent
+---
+Тело промпта.
+```
+
+Конец сегмента.
+"""
+
+
+def test_horizontal_rule_inside_code_block_does_not_split_sections(tmp_path):
+    """`---` внутри fenced code block — часть текста промпта, а не разделитель секций."""
+    path = tmp_path / "MASTER_Тест.md"
+    path.write_text(MASTER_WITH_FENCED_HR, encoding='utf-8')
+
+    data = parse_master_md(path)
+
+    assert len(data['segments']) == 1
+    assert 'name: agent' in data['segments'][0]['body']
