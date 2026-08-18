@@ -89,7 +89,7 @@ def _split_sections(text):
     """Режет мастер-MD на header, route (опц.), reconstruction (опц.), segments[]."""
     text = text.replace('\r\n', '\n').replace('\r', '\n')
 
-    # Срезаем необязательный YAML-фронтматтер паспорта источника (SKILL.md ШАГ 4):
+    # Срезаем необязательный YAML-фронтматтер паспорта источника (master.md ШАГ 4):
     # `---\nsource_id: ...\nsource_url: ...\n---\n` перед `# Название`. Без этого
     # blind-сплит по `\n---\n` ниже сливает открывающий `---` фронтматтера с шапкой.
     frontmatter = re.match(r'^---\n.*?\n---\n', text, re.DOTALL)

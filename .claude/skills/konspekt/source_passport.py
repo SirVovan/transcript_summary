@@ -33,7 +33,7 @@ def passport_lines(source_id: str, source_url: str) -> str:
 
 
 if __name__ == "__main__":
-    # CLI для SKILL.md: `python source_passport.py <clipping.md>` -> печатает паспорт.
+    # CLI для master.md: `python source_passport.py <clipping.md>` -> печатает паспорт.
     import sys
     if len(sys.argv) != 2:
         print("usage: python source_passport.py <clipping.md>", file=sys.stderr)
