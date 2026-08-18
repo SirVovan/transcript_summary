@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from widget_generator import build_reconstruction_html, build_timeline_html, build_html
+from widget_generator import build_reconstruction_html, build_html
 import widget_generator
 import md_parser
 
@@ -41,44 +41,10 @@ def test_build_reconstruction_html_with_table():
     assert '<p><p>' not in result
 
 
-# --- Item 2: build_timeline_html ---
+# --- Item 2: build_html без Траектории (выпилена 2026-08-18) ---
 
-def test_build_timeline_html_none():
-    """trajectory=None returns empty string"""
-    assert build_timeline_html(None) == ''
-
-
-def test_build_timeline_html_basic():
-    """timeline renders blocks with correct move labels and goTo calls"""
-    trajectory = {
-        'prose': '<p>Спикер идёт от проблемы к решению.</p>',
-        'moves': [
-            {'segment': '1', 'timing': '00:00–10:00', 'move': 'концепт', 'description': 'вводит идею'},
-            {'segment': '2', 'timing': '10:00–22:00', 'move': 'практика', 'description': 'показывает'},
-        ]
-    }
-    result = build_timeline_html(trajectory)
-    assert 'концепт' in result
-    assert 'практика' in result
-    assert 'goTo' in result
-
-
-def test_build_timeline_html_unknown_move_uses_default_color():
-    """unknown move type gets default gray color"""
-    trajectory = {
-        'prose': '',
-        'moves': [
-            {'segment': '1', 'timing': '00:00–05:00', 'move': 'неизвестный', 'description': 'что-то'},
-        ]
-    }
-    result = build_timeline_html(trajectory)
-    assert '#888888' in result
-
-
-# --- Item 2: build_html trajectory first ---
-
-def _make_sample_data(with_trajectory=True):
-    data = {
+def _make_sample_data():
+    return {
         'meta': {'badge': 'Курс', 'title': 'Тест', 'out': 'test.html'},
         'reconstruction': {
             'prose': '<p>Реконструкция.</p>',
@@ -94,28 +60,13 @@ def _make_sample_data(with_trajectory=True):
         ],
         'prompts': {}
     }
-    if with_trajectory:
-        data['trajectory'] = {
-            'prose': '<p>Траектория.</p>',
-            'moves': [
-                {'segment': '1', 'timing': '00:00–10:00', 'move': 'концепт', 'description': 'вводит идею'}
-            ]
-        }
-    return data
 
 
-def test_build_html_trajectory_first_slide():
-    """when trajectory present, its title appears before reconstruction title"""
-    html = build_html(_make_sample_data(with_trajectory=True))
-    idx_traj = html.index('Траектория')
-    idx_recon = html.index('Логическая реконструкция')
-    assert idx_traj < idx_recon
-
-
-def test_build_html_no_trajectory_no_crash():
-    """widget builds fine without trajectory field"""
-    html = build_html(_make_sample_data(with_trajectory=False))
+def test_build_html_reconstruction_first_slide():
+    """реконструкция идёт первым слайдом"""
+    html = build_html(_make_sample_data())
     assert 'Логическая реконструкция' in html
+    assert html.index('Логическая реконструкция') < html.index('Введение')
 
 
 # --- Item 3: Output filename logic (MASTER_ -> WIDGET_) ---
@@ -270,3 +221,53 @@ def test_frame_weights_and_data_cand(tmp_path):
     w = frame_weights(md, tmp_path)
     assert set(w) == {7, 12} and all(v > 0 for v in w.values())
     assert 'data-cand="7"' in _render_image('Слайд', 'cand_07.png', tmp_path)
+
+
+# Task 4.2: trim_to_weight tests
+def test_trim_to_weight_drops_budget_first():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.8, 'phase': 'budget'},
+        {'cand_id': 3, 'segment_id': '01', 'confidence': 0.2, 'phase': 'budget'},
+    ]
+    size = {1: 4, 2: 4, 3: 4}
+    kept, lost = widget_generator.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {1, 2}    # выбит бюджетный с меньшим conf (3)
+    assert lost == []                                # обязательный не тронут
+
+def test_trim_to_weight_degrades_mandatory_last():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.1, 'phase': 'mandatory'},
+    ]
+    size = {1: 6, 2: 6}
+    kept, lost = widget_generator.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {1}       # оставлен более уверенный
+    assert lost == ['02']
+
+def test_trim_to_weight_noop_when_fits():
+    sel = [{'cand_id': 1, 'segment_id': '01', 'confidence': 0.5, 'phase': 'mandatory'}]
+    kept, lost = widget_generator.trim_to_weight(sel, {1: 3}, limit_bytes=8)
+    assert kept == sel and lost == []
+
+def test_trim_drops_marker_last():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.2, 'phase': 'marker'},
+        {'cand_id': 2, 'segment_id': '01', 'confidence': 0.9, 'phase': 'mandatory'},
+        {'cand_id': 3, 'segment_id': '01', 'confidence': 0.9, 'phase': 'budget'},
+    ]
+    size = {1: 6, 2: 6, 3: 6}
+    kept, lost = widget_generator.trim_to_weight(sel, size, limit_bytes=8)
+    # выбиты budget(3) и mandatory(2); marker(1) выжил, хоть и conf ниже
+    assert {s['cand_id'] for s in kept} == {1}
+    assert lost == ['01']   # потерян mandatory сегмента 01
+
+def test_trim_degrades_marker_only_when_forced():
+    sel = [
+        {'cand_id': 1, 'segment_id': '01', 'confidence': 0.1, 'phase': 'marker'},
+        {'cand_id': 2, 'segment_id': '02', 'confidence': 0.9, 'phase': 'marker'},
+    ]
+    size = {1: 6, 2: 6}
+    kept, lost = widget_generator.trim_to_weight(sel, size, limit_bytes=8)
+    assert {s['cand_id'] for s in kept} == {2}   # оставлен более уверенный маркер
+    assert lost == ['01']

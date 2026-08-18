@@ -330,23 +330,6 @@ def select_frames(triage, candidates, cap):
     selected += [dict(s, phase='budget') for s in rest[:max(0, budget)]]
     return selected
 
-def trim_to_weight(selection, size_by_cand, limit_bytes):
-    kept = list(selection)
-
-    def total():
-        return sum(size_by_cand.get(s['cand_id'], 0) for s in kept)
-
-    lost = []
-    for phase in ('budget', 'mandatory', 'marker'):
-        for s in sorted((s for s in kept if s['phase'] == phase),
-                        key=lambda s: s['confidence']):
-            if total() <= limit_bytes:
-                break
-            kept.remove(s)
-            if phase in ('mandatory', 'marker'):
-                lost.append(s['segment_id'])
-    return kept, lost
-
 def segment_report(bounds, candidates, triage, selection, block_by_seg=None):
     block_by_seg = block_by_seg or {}
     triage_by = {t['cand_id']: t for t in triage}

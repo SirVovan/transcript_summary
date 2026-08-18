@@ -159,30 +159,6 @@ body { font-family:var(--ff); background-color:var(--bg-page); background-image:
 .toc-item:not(.active):hover .toc-num{color:rgba(255,255,255,.65)}
 .toc-item:not(.active):hover .toc-text{color:rgba(255,255,255,.75)}
 
-.body.body-tl{grid-template-columns:1fr}
-.lcol.lcol-full{border-right:none;overflow-y:auto}
-.tl-prose{margin-bottom:16px;color:var(--tx2);font-size:13.5px;line-height:1.7}
-.tl-track{display:flex;gap:4px;width:100%;margin-top:8px;overflow-x:auto;padding-bottom:6px}
-.tl-track::-webkit-scrollbar{height:3px}
-.tl-track::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-.tl-block{display:flex;flex-direction:column;justify-content:flex-end;padding:8px 10px;border-radius:10px;cursor:pointer;min-width:100px;flex-shrink:0;transition:opacity .15s,transform .15s;overflow:hidden}
-.tl-block:hover{opacity:.85;transform:translateY(-2px)}
-.tl-move{font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tl-time{font-size:10px;color:rgba(255,255,255,.7);font-family:var(--fm);margin-top:3px;white-space:nowrap}
-.tl-desc{font-size:11px;color:rgba(255,255,255,.85);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.tl-list{position:relative;padding:8px 0}
-.tl-list::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--border);z-index:0}
-.tl-item{display:flex;align-items:flex-start;padding-bottom:28px;position:relative;cursor:pointer}
-.tl-item:nth-child(odd){justify-content:flex-end;padding-right:calc(50% + 24px)}
-.tl-item:nth-child(even){padding-left:calc(50% + 24px)}
-.tl-item:last-child{padding-bottom:0}
-.tl-node{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:var(--c);border:3px solid var(--surface);box-shadow:0 0 0 2px var(--c);z-index:1;flex-shrink:0}
-.tl-card{padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:box-shadow .15s}
-.tl-item:hover .tl-card{box-shadow:0 2px 8px rgba(0,0,0,.1)}
-.tl-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.tl-badge{font-size:12px;font-weight:700;color:var(--c);letter-spacing:.02em}
-.tl-vtime{font-size:11px;color:var(--tx3);font-family:var(--fm)}
-.tl-vdesc{font-size:13px;color:var(--tx2);line-height:1.6}
 
 figure.frame { margin:10px 0; }
 figure.frame img { display:block; width:100%; max-width:100%; height:auto; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.12); }
@@ -201,8 +177,8 @@ figure.frame figcaption { margin-top:4px; font-size:11.5px; color:#6b7280; }
   .toc-panel { max-width:calc(100vw - 28px); }
 
   /* колонки встают друг под друга, прокручивается вся страница */
-  .body, .body.body-tl { display:block; overflow:visible; }
-  .lcol, .lcol.lcol-full { border-right:none; border-bottom:1px solid var(--border); overflow:visible; padding:16px 18px 18px; }
+  .body { display:block; overflow:visible; }
+  .lcol { border-right:none; border-bottom:1px solid var(--border); overflow:visible; padding:16px 18px 18px; }
   .seg-body { overflow:visible; padding-right:0; font-size:15.5px; line-height:1.72; }
   .seg-title { font-size:20px; }
   .seg-body h3 { font-size:15px; }
@@ -212,11 +188,6 @@ figure.frame figcaption { margin-top:4px; font-size:11.5px; color:#6b7280; }
   /* футер с навигацией всегда под рукой */
   .footer { position:sticky; bottom:0; padding:10px 14px; gap:10px; }
   .btn { padding:9px 18px; font-size:13.5px; }
-
-  /* реконструкция/траектория: вертикальная лента в одну сторону */
-  .tl-list::before { left:9px; margin-left:0; }
-  .tl-item:nth-child(odd), .tl-item:nth-child(even) { justify-content:flex-start; padding-left:30px; padding-right:0; }
-  .tl-node { left:9px; transform:none; }
 }
 
 @media (max-width:480px) {
@@ -232,8 +203,7 @@ var T={
   concept: {lbl:'Концепция',   c:'#2562B0',bg:'#ECF2FB',mid:'#B8D0EF',pale:'#F4F8FE',stripe:'#2562B0'},
   method:  {lbl:'Методология', c:'#2E6E2E',bg:'#EBF5EB',mid:'#B0D4B0',pale:'#F3FAF3',stripe:'#2E6E2E'},
   demo:    {lbl:'Демонстрация',c:'#96580F',bg:'#FAF0E4',mid:'#DEB882',pale:'#FDF8F0',stripe:'#96580F'},
-  final:   {lbl:'Итоги',       c:'#4C3FA0',bg:'#EDEAFA',mid:'#BEB6E6',pale:'#F5F4FC',stripe:'#4C3FA0'},
-  timeline:{lbl:'Траектория',  c:'#5A6A7A',bg:'#F0F2F5',mid:'#B0BCC8',pale:'#F5F7FA',stripe:'#5A6A7A'}
+  final:   {lbl:'Итоги',       c:'#4C3FA0',bg:'#EDEAFA',mid:'#BEB6E6',pale:'#F5F4FC',stripe:'#4C3FA0'}
 };"""
 
 JS_ENGINE = """\
@@ -259,7 +229,6 @@ function setTypeVars(t){
 function render(){
   var s=SEG[cur];
   var t=T[s.type];
-  var isTL=s.type==='timeline';
   var total=SEG.length<10?'0'+SEG.length:''+SEG.length;
   var pct=Math.round((cur+1)/SEG.length*100)+'%';
   document.getElementById('stripe').style.background=t.stripe;
@@ -277,21 +246,20 @@ function render(){
   document.getElementById('nb').textContent=cur===SEG.length-1?'В начало \u2192':'Далее \u2192';
   document.getElementById('finfo').textContent='Сегмент '+s.id+' из '+total+(s.timing?' \u00b7 '+s.timing:'');
   var bdy=document.getElementById('body');
-  bdy.className=isTL?'body body-tl':'body';
+  bdy.className='body';
   bdy.innerHTML=
-    '<div class="lcol'+(isTL?' lcol-full':'')+'">'
+    '<div class="lcol">'
       +'<span class="seg-pill" style="color:'+t.c+';background:'+t.bg+';border:1px solid '+t.mid+';box-shadow:0 1px 4px '+t.mid+'60">'
         +'<span class="seg-dot" style="background:'+t.c+'"></span>'
-        +t.lbl
+        +(s.label||t.lbl)
       +'</span>'
       +'<div class="seg-title">'+s.title+'</div>'
-      +(isTL?'':'<div class="seg-timing">'+s.timing+'</div>')
+      +'<div class="seg-timing">'+s.timing+'</div>'
       +'<div class="seg-body">'+BODY[s.id]+'</div>'
     +'</div>'
-    +(isTL?'':
-      '<div class="rcol" style="background:'+t.pale+'">'
-      +'<div class="rcol-inner">'+RIGHT[s.id]+'</div>'
-      +'</div>');
+    +'<div class="rcol" style="background:'+t.pale+'">'
+    +'<div class="rcol-inner">'+RIGHT[s.id]+'</div>'
+    +'</div>';
 }
 
 function go(d){
@@ -370,82 +338,11 @@ def js_arr(segments):
     items = []
     for s in segments:
         items.append('  ' + json.dumps(
-            {'id': s['id'], 'type': s['type'], 'title': s['title'], 'timing': s['timing']},
+            {'id': s['id'], 'type': s['type'], 'label': s.get('label', ''),
+             'title': s['title'], 'timing': s['timing']},
             ensure_ascii=False
         ))
     return '[\n' + ',\n'.join(items) + '\n]'
-
-
-MOVE_COLORS = {
-    'концепт':      '#2562B0',
-    'метафора':     '#7B5EA7',
-    'пример':       '#2E6E2E',
-    'демонстрация': '#96580F',
-    'практика':     '#B07020',
-    'маркетинг':    '#C0442E',
-    'вывод':        '#5A7A5A',
-    'вопрос':       '#6A8FAF',
-}
-_DEFAULT_MOVE_COLOR = '#888888'
-
-
-def _time_str_to_seconds(s):
-    parts = s.strip().split(':')
-    try:
-        if len(parts) == 2:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60
-        if len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-    except (ValueError, IndexError):
-        pass
-    return 0
-
-
-def _move_duration(timing):
-    if '–' not in timing:
-        return 0
-    start_s, end_s = timing.split('–', 1)
-    return max(0, _time_str_to_seconds(end_s) - _time_str_to_seconds(start_s))
-
-
-def _build_timeline_vertical(trajectory):
-    if not trajectory:
-        return ''
-    prose = trajectory.get('prose', '')
-    moves = trajectory.get('moves', [])
-    if not moves:
-        return prose
-
-    parts = []
-    if prose:
-        parts.append(f'<div class="tl-prose">{prose}</div>')
-
-    parts.append('<div class="tl-list">')
-    for i, move in enumerate(moves):
-        raw_id = move.get('segment', str(i + 1))
-        seg_id = raw_id.zfill(2) if raw_id.isdigit() else raw_id
-        move_type = move.get('move', '')
-        timing = move.get('timing', '')
-        description = move.get('description', '')
-        color = MOVE_COLORS.get(move_type, _DEFAULT_MOVE_COLOR)
-        parts.append(
-            f'<div class="tl-item" style="--c:{color}" onclick="goTo(\'{seg_id}\')">'
-            f'<div class="tl-node"></div>'
-            f'<div class="tl-card">'
-            f'<div class="tl-row">'
-            f'<span class="tl-badge">{move_type}</span>'
-            f'<span class="tl-vtime">{timing}</span>'
-            f'</div>'
-            f'<div class="tl-vdesc">{description}</div>'
-            f'</div>'
-            f'</div>'
-        )
-    parts.append('</div>')
-    return '\n'.join(parts)
-
-
-def build_timeline_html(trajectory):
-    return _build_timeline_vertical(trajectory)
 
 
 def build_reconstruction_html(recon):
@@ -490,13 +387,6 @@ def build_html(data):
         body_dict  = {'00': build_reconstruction_html(recon), **body_dict}
         right_dict = {'00': '<div class="insights"></div>', **right_dict}
         segments   = [{'id': '00', 'type': 'concept', 'title': 'Логическая реконструкция', 'timing': ''}] + list(segments)
-
-    trajectory = data.get('trajectory')
-    if trajectory:
-        tl_html    = build_timeline_html(trajectory)
-        body_dict  = {'TL': tl_html, **body_dict}
-        right_dict = {'TL': '', **right_dict}
-        segments   = [{'id': 'TL', 'type': 'timeline', 'title': 'Траектория', 'timing': ''}] + list(segments)
 
     pr_js    = 'var PR = ' + js_obj(prompts) + ';'
     body_js  = 'var BODY = ' + js_obj(body_dict) + ';'
@@ -562,13 +452,35 @@ def build_html(data):
 
 WEIGHT_LIMIT = 8 * 1024 * 1024
 
+
+def trim_to_weight(selection, size_by_cand, limit_bytes):
+    """Выбрасывает кадры до вписывания в лимит: budget -> mandatory -> marker.
+
+    Внутри фазы — по возрастанию confidence. Возвращает (kept, lost),
+    где lost — segment_id потерянных mandatory/marker кадров (для предупреждения).
+    """
+    kept = list(selection)
+
+    def total():
+        return sum(size_by_cand.get(s['cand_id'], 0) for s in kept)
+
+    lost = []
+    for phase in ('budget', 'mandatory', 'marker'):
+        for s in sorted((s for s in kept if s['phase'] == phase),
+                        key=lambda s: s['confidence']):
+            if total() <= limit_bytes:
+                break
+            kept.remove(s)
+            if phase in ('mandatory', 'marker'):
+                lost.append(s['segment_id'])
+    return kept, lost
+
+
 def control_weight(html_str, weights, selection, limit_bytes):
     total = len(html_str.encode('utf-8'))
     if total <= limit_bytes:
         return html_str, []
     import re
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from frames_extract import trim_to_weight
     overhead = total - sum(weights.values())
     img_sel = [s for s in selection if s['cand_id'] in weights]
     kept, lost = trim_to_weight(img_sel, weights, max(0, limit_bytes - overhead))

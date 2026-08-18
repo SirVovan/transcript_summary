@@ -4,7 +4,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from md_parser import MasterMDParseError, parse_master_md
+from md_parser import MasterMDParseError, parse_master_md, _classify_type
 
 
 MASTER_BODY = """# Тест. Модуль 1: заголовок
@@ -67,3 +67,55 @@ def test_parser_rejects_missing_separator_between_segments(tmp_path):
 
     with pytest.raises(MasterMDParseError, match='пропущен разделитель'):
         parse_master_md(path)
+
+
+# --- Типы блоков пяти профилей -> группа цвета (расширено 2026-08-18) ---
+
+PROFILE_TYPES = {
+    'base': [
+        ('Введение', 'concept'), ('Основное содержание', 'concept'), ('Пример', 'demo'),
+        ('Обсуждение', 'concept'), ('Итоги', 'final'), ('Орг. момент', 'concept'),
+        ('Другое', 'concept'),
+    ],
+    'lecture': [
+        ('Введение', 'concept'), ('Концепция', 'concept'), ('Методология', 'method'),
+        ('Инструмент / практика', 'method'), ('Пример / кейс', 'demo'),
+        ('Демонстрация', 'demo'), ('Задание / ДЗ', 'method'),
+        ('Вопросы / ответы', 'demo'), ('Орг. момент', 'concept'),
+        ('Итоги / резюме', 'final'),
+    ],
+    'conference': [
+        ('Открытие / приветствие', 'concept'), ('Концепция', 'concept'),
+        ('Методология', 'method'), ('Кейс / пример', 'demo'), ('Демонстрация', 'demo'),
+        ('Панельная дискуссия', 'concept'), ('Вопросы / ответы', 'demo'),
+        ('Маркетинговый блок', 'demo'), ('Орг. момент', 'concept'), ('Закрытие', 'final'),
+    ],
+    'custdev': [
+        ('Установление контакта', 'concept'), ('Контекст / бэкграунд', 'concept'),
+        ('Проблема', 'concept'), ('Потребность', 'concept'), ('Текущее решение', 'demo'),
+        ('Реакция на концепцию', 'concept'), ('Инсайт', 'concept'),
+        ('Возражение', 'demo'), ('Договорённость / next step', 'method'),
+        ('Орг. момент', 'concept'),
+    ],
+    'meeting': [
+        ('Открытие / повестка', 'concept'), ('Обсуждение', 'concept'),
+        ('Проблема', 'concept'), ('Решение', 'method'),
+        ('Голосование / согласование', 'method'), ('Action item', 'method'),
+        ('Информирование', 'concept'), ('Орг. момент', 'concept'), ('Закрытие', 'final'),
+    ],
+}
+
+
+@pytest.mark.parametrize('profile,pairs', sorted(PROFILE_TYPES.items()))
+def test_classify_type_covers_profile_dictionary(profile, pairs):
+    """Каждый тип блока из словаря профиля попадает в свою группу, не в фолбэк."""
+    for raw, expected in pairs:
+        assert _classify_type(raw) == expected, f'{profile}: {raw}'
+
+
+def test_segment_carries_raw_type_as_label(tmp_path):
+    """Сырой **Тип:** едет в сегмент — плашка виджета показывает его, не ярлык темы."""
+    path = tmp_path / "MASTER_Тест.md"
+    path.write_text(MASTER_BODY, encoding='utf-8')
+    data = parse_master_md(path)
+    assert data['segments'][0]['label']
