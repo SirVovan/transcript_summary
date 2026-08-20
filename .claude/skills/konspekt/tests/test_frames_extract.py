@@ -465,3 +465,71 @@ def test_batch_segments_contiguous_le3():
 
 def test_batch_segments_single():
     assert frames_extract.batch_segments(['01']) == [['01']]
+
+
+# --- диапазон мастер-MD vs видео/SRT (backlog п.15) ---
+
+_MD_RANGE = ("## Сегмент 1 | 00:00:00-00:01:00 | A\n\n"
+             "## Сегмент 2 | 00:01:00-00:02:00 | B\n")
+
+
+def test_master_range_covers_bounds_with_eps():
+    bounds = frames_extract.segment_bounds(_MD_RANGE)
+    lo, hi = frames_extract.master_range(bounds)
+    assert lo <= 0.0
+    assert hi >= 120.0
+    assert hi < 180.0        # не растягиваем окно произвольно
+
+
+def test_scenes_beyond_master_are_dropped(tmp_path, monkeypatch):
+    """Сцены из следующих частей эфира не попадают в кандидаты вовсе."""
+    monkeypatch.setattr(frames_extract, 'scene_timecodes',
+                        lambda v, threshold: [10.0, 70.0, 5000.0, 9000.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+    monkeypatch.setattr(frames_extract, 'extract_frame',
+                        lambda video, t, out, shift=0.7: _png(out))
+
+    frames, _ = frames_extract.build_candidates('v.mp4', '', _MD_RANGE, tmp_path, min_gap=0.0)
+    times = [t for _, t, *_ in frames]
+    assert times == [10.0, 70.0]
+
+
+def test_markers_beyond_master_are_dropped(tmp_path, monkeypatch):
+    """Маркер «заскриньте» из части 2 не сваливается в последний сегмент."""
+    srt = ("1\n00:00:30,000 --> 00:00:31,000\nЗаскриньте это\n\n"
+           "2\n02:30:00,000 --> 02:30:01,000\nЗаскриньте вот это\n")
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda v, threshold: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+    monkeypatch.setattr(frames_extract, 'extract_frame',
+                        lambda video, t, out, shift=0.7: _png(out))
+
+    frames, _ = frames_extract.build_candidates('v.mp4', srt, _MD_RANGE, tmp_path, min_gap=0.0)
+    times = [t for _, t, *_ in frames]
+    assert any(abs(t - 30.0) < 1e-6 for t in times)
+    assert all(t < 130.0 for t in times)
+
+
+def test_warns_when_video_longer_than_master(tmp_path, monkeypatch, capsys):
+    """Рассинхрон видео/мастера — громкое предупреждение в stderr, а не тишина."""
+    monkeypatch.setattr(frames_extract, 'scene_timecodes',
+                        lambda v, threshold: [10.0, 9000.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+    monkeypatch.setattr(frames_extract, 'extract_frame',
+                        lambda video, t, out, shift=0.7: _png(out))
+
+    frames_extract.build_candidates('v.mp4', '', _MD_RANGE, tmp_path, min_gap=0.0)
+    err = capsys.readouterr().err
+    assert 'длиннее' in err
+
+
+def test_no_warning_when_ranges_match(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(frames_extract, 'scene_timecodes', lambda v, threshold: [10.0, 70.0])
+    monkeypatch.setattr(frames_extract, 'cue_timecodes', lambda s: [])
+    monkeypatch.setattr(frames_extract, 'phash_dedup', lambda frames, **k: frames)
+    monkeypatch.setattr(frames_extract, 'extract_frame',
+                        lambda video, t, out, shift=0.7: _png(out))
+
+    frames_extract.build_candidates('v.mp4', '', _MD_RANGE, tmp_path, min_gap=0.0)
+    assert 'длиннее' not in capsys.readouterr().err

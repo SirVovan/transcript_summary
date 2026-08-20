@@ -32,6 +32,7 @@ LABEL_COLORS = {
     'idea': ('#ECF2FB', '#2562B0'),    # (И) синий
     'method': ('#EBF5EB', '#2E6E2E'),  # (М) зелёный
     'demo': ('#FAF0E4', '#96580F'),    # (Д) оранжевый
+    'quote': ('#F4F4F5', '#8A8A8A'),   # дословная цитата — нейтральный серый
 }
 
 # Точные метки (нормализованные, lowercase, без точек)
@@ -48,6 +49,8 @@ LABEL_TABLE = {
     'пример декомпозиции': 'demo',
     'демонстрация': 'demo',
     'важно': 'demo',
+    'цитата': 'quote',
+    'текст автора': 'quote',
 }
 
 SEGMENT_TYPE_COLORS = {
@@ -486,11 +489,35 @@ def _label_color(label):
     return LABEL_COLORS['demo']
 
 
+def _bq_style(bg, border):
+    return (
+        f"background:{bg};border-left:3px solid {border};"
+        f"border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;"
+        f"font-size:12.5px;line-height:1.55"
+    )
+
+
+def _bq_paragraphs(lines):
+    """Строки блока -> список абзацев; пустая строка `>` = граница абзаца."""
+    paras, cur = [], []
+    for ln in lines:
+        if ln == '':
+            if cur:
+                paras.append(' '.join(cur))
+                cur = []
+        else:
+            cur.append(ln)
+    if cur:
+        paras.append(' '.join(cur))
+    return paras
+
+
 def _render_blockquote(lines):
     """
     Список «голых» строк блока (без `> ` префикса) -> coloured <div>.
     Первая строка: `**Метка:** [опц. inline-текст]`
     Дальше: либо продолжение прозы, либо нумерованный/маркированный список.
+    Блок без метки — дословная цитата, нейтральный серый (backlog п.21).
     """
     if not lines:
         raise MasterMDParseError("Пустой blockquote-блок")
@@ -498,21 +525,20 @@ def _render_blockquote(lines):
     first = lines[0]
     m = re.match(r'\*\*([^*]+?):\*\*\s*(.*)', first)
     if not m:
-        raise MasterMDParseError(f"Ожидался `**Метка:** ...` в blockquote, нашёл: {first!r}")
+        # Дословная цитата без метки: не промпт и не скрипт, а текст автора.
+        style = _bq_style(*LABEL_COLORS['quote'])
+        body = ''.join(f'<p>{_apply_inline(p)}</p>' for p in _bq_paragraphs(lines))
+        return f'<div style="{style}">{body}</div>'
     label, inline_after_label = m.group(1).strip(), m.group(2).strip()
 
     bg, border = _label_color(label)
-    style = (
-        f"background:{bg};border-left:3px solid {border};"
-        f"border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;"
-        f"font-size:12.5px;line-height:1.55"
-    )
+    style = _bq_style(bg, border)
 
     rest = lines[1:]
 
     # Отрезаем хвостовую прозу: список + пустая `>` + проза → разделяем.
     tail_prose_lines = []
-    if '' in rest:
+    if '' in rest and any(re.match(r'(\d+\.|-)\s+', l) for l in rest):
         blank_idx = rest.index('')
         tail_prose_lines = [l for l in rest[blank_idx + 1:] if l]
         rest = rest[:blank_idx]
@@ -544,11 +570,15 @@ def _render_blockquote(lines):
         prefix = f'{_apply_inline(inline_after_label)}' if inline_after_label else ''
         return f'<div style="{style}"><strong>{label}:</strong> {prefix}{body}</div>'
     else:
-        # Простая проза - склеиваем строки через пробел
-        full = inline_after_label
-        if rest:
-            full = (full + ' ' + ' '.join(rest)).strip() if full else ' '.join(rest)
-        return f'<div style="{style}"><strong>{label}:</strong> {_apply_inline(full)}</div>'
+        # Проза. Один абзац — склеиваем строки через пробел; несколько — каждый своим <p>.
+        paras = _bq_paragraphs(rest)
+        if inline_after_label:
+            paras = [inline_after_label + ' ' + paras[0]] + paras[1:] if paras else [inline_after_label]
+        if len(paras) <= 1:
+            full = paras[0] if paras else ''
+            return f'<div style="{style}"><strong>{label}:</strong> {_apply_inline(full)}</div>'
+        body = ''.join(f'<p>{_apply_inline(p)}</p>' for p in paras)
+        return f'<div style="{style}"><strong>{label}:</strong>{body}</div>'
 
 
 def _render_prompt(label_text, code_text, pid):

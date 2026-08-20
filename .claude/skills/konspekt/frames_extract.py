@@ -3,7 +3,12 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+# Окно мастер-MD: за его пределы кандидаты не выпускаем (backlog п.15).
+RANGE_EPS_SEC = 2.0        # допуск на округление границ сегментов
+RANGE_WARN_SEC = 60.0      # насколько дольше мастера должно быть видео, чтобы предупреждать
 
 CUE_MARKERS = [
     'смотрите', 'на слайде', 'на экране', 'скопируйте',
@@ -46,6 +51,11 @@ def segment_bounds(master_md_text):
             raise SegmentBoundsError(
                 f"сегменты {cur['id']} и {nxt['id']} пересекаются")
     return bounds
+
+def master_range(bounds, eps=RANGE_EPS_SEC):
+    """Окно, покрытое мастер-MD: [первый сегмент - eps, последний + eps]."""
+    return bounds[0]['start'] - eps, bounds[-1]['end'] + eps
+
 
 def assign_segment(timecode, bounds):
     first, last = bounds[0], bounds[-1]
@@ -249,20 +259,35 @@ def build_candidates(video, srt_text, master_md_text, work_dir,
                      marker_window_sec=100.0, marker_window_frames=5):
     work = Path(work_dir); work.mkdir(parents=True, exist_ok=True)
     bounds = segment_bounds(master_md_text)
-    scenes = scene_timecodes(video, threshold)
+    lo, hi = master_range(bounds)
+    all_scenes = scene_timecodes(video, threshold)
+    all_cues = cue_timecodes(srt_text)
+    all_markers = marker_timecodes(srt_text)
+
+    # Транскрипт часто режется на части: видео и SRT покрывают весь эфир,
+    # а мастер — только одну часть. Таймкоды за концом мастера иначе свалились бы
+    # в последний сегмент и засорили и его, и вход триажа.
+    beyond = [t for t in all_scenes + all_cues + [m['timecode'] for m in all_markers]]
+    overshoot = (max(beyond) - hi) if beyond else 0.0
+    if overshoot > RANGE_WARN_SEC:
+        print(f'⚠️  видео/SRT длиннее мастер-MD на {overshoot / 60:.0f} мин '
+              f'(мастер кончается на {hi / 60:.0f}-й мин) — вероятно, транскрипт по частям. '
+              f'Кадры за концом мастера отброшены.', file=sys.stderr)
+
+    scenes = [t for t in all_scenes if lo <= t <= hi]
     # обычные (scene+cue) — через дедуп/кап
     tagged, final_cap = bucket_timecodes(
-        scenes, cue_timecodes(srt_text), bounds,
+        scenes, [t for t in all_cues if lo <= t <= hi], bounds,
         min_gap=min_gap, per_segment_cap=per_segment_cap, global_cap=global_cap)
     normal = [(t, sid, False, '') for t, sid in tagged]
     # маркеры — вне дедупа/капа, с окном серии
-    markers = marker_timecodes(srt_text)
+    markers = [m for m in all_markers if lo <= m['timecode'] <= hi]
     anchors = [m['timecode'] for m in markers]
     marker_items = []
     seen_marker_tc = set()   # дедуп на стыке окон соседних маркеров (finding 6)
     for i, m in enumerate(markers):
         nxt = anchors[i + 1] if i + 1 < len(anchors) else float('inf')
-        end = min(m['timecode'] + marker_window_sec, nxt)
+        end = min(m['timecode'] + marker_window_sec, nxt, hi)
         for t in expand_marker_window(m['timecode'], scenes, end, marker_window_frames):
             if t in seen_marker_tc:
                 continue

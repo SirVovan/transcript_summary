@@ -137,3 +137,38 @@ def test_mixed_block_order_preserved():
     )
     assert html.index('Вступление') < html.index('Подтема') < html.index('пункт')
     assert html.index('пункт') < html.index('правило') < html.index('Заключение')
+
+
+# --- цитата без метки и многоабзацность (backlog п.21) ---
+
+def test_bare_blockquote_renders_as_neutral_quote():
+    """Дословная цитата без `**Метка:**` не роняет парсер — нейтральный серый блок."""
+    html = parse('> Я написал пост, который сейчас зачитаю дословно.')
+    assert '<div style=' in html
+    assert '<strong>' not in html
+    assert 'Я написал пост, который сейчас зачитаю дословно.' in html
+
+
+def test_quote_label_gets_own_colour():
+    """Метка «Цитата» — своя, не сваливается в дефолтный оранжевый."""
+    from md_parser import _label_color
+    assert _label_color('Цитата') != _label_color('Пример')
+    html = parse('> **Цитата:** слова автора.')
+    assert '<strong>Цитата:</strong>' in html
+
+
+def test_bare_blockquote_keeps_paragraphs():
+    """Многоабзацная цитата без метки: каждый абзац отдельным <p>, ничего не схлопывается."""
+    html = parse('> Первый абзац.\n>\n> Второй абзац.\n>\n> Третий абзац.')
+    assert html.count('<div style=') == 1
+    assert '<p>Первый абзац.</p>' in html
+    assert '<p>Второй абзац.</p>' in html
+    assert '<p>Третий абзац.</p>' in html
+
+
+def test_labelled_blockquote_keeps_tail_paragraphs():
+    """Метка + несколько абзацев хвоста: абзацы не склеиваются в один."""
+    html = parse('> **Цитата:**\n>\n> Первый абзац.\n>\n> Второй абзац.')
+    assert html.count('<div style=') == 1
+    assert '<p>Первый абзац.</p>' in html
+    assert '<p>Второй абзац.</p>' in html
